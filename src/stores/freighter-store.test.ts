@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { useFreighterStore } from './freighter-store';
+import {
+  FREIGHTER_PERSIST_KEY,
+  mergePersistedFreighterState,
+  partializeFreighterState,
+  useFreighterStore,
+} from './freighter-store';
 import {
   fetchStellarWithFailover,
   normalizeEndpointUrl,
@@ -291,4 +296,163 @@ test('an already-aborted caller signal cancels before any request', async () => 
   );
 
   assert.equal(calls, 0);
+});
+
+// -- persistence (issue #516) ------------------------------------------------
+
+type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+function createMemoryStorage(initial: Record<string, string> = {}): StorageLike & {
+  data: Map<string, string>;
+} {
+  const data = new Map(Object.entries(initial));
+  return {
+    data,
+    getItem: (key) => data.get(key) ?? null,
+    setItem: (key, value) => void data.set(key, value),
+    removeItem: (key) => void data.delete(key),
+  };
+}
+
+/** Runs `run` with a fake `window.localStorage`, restoring the SSR-like global after. */
+async function withWindowStorage<T>(storage: StorageLike, run: () => Promise<T> | T): Promise<T> {
+  const globals = globalThis as { window?: unknown };
+  const previous = globals.window;
+  globals.window = { localStorage: storage };
+  try {
+    return await run();
+  } finally {
+    if (previous === undefined) delete globals.window;
+    else globals.window = previous;
+  }
+}
+
+const readPersisted = (storage: ReturnType<typeof createMemoryStorage>) => {
+  const raw = storage.data.get(FREIGHTER_PERSIST_KEY);
+  return raw ? (JSON.parse(raw) as { state: Record<string, unknown>; version: number }) : null;
+};
+
+test('partialize keeps only a healthy connection and never the network passphrase', () => {
+  assert.deepEqual(partializeFreighterState({ status: 'connected', publicKey: validPublicKey }), {
+    status: 'connected',
+    publicKey: validPublicKey,
+  });
+  for (const status of ['disconnected', 'connecting', 'locked'] as const) {
+    assert.deepEqual(partializeFreighterState({ status, publicKey: validPublicKey }), {
+      status: 'disconnected',
+      publicKey: null,
+    });
+  }
+  assert.deepEqual(partializeFreighterState({ status: 'connected', publicKey: 'bogus' }), {
+    status: 'disconnected',
+    publicKey: null,
+  });
+});
+
+test('merge ignores malformed persisted snapshots', () => {
+  const current = useFreighterStore.getState();
+
+  for (const bad of [null, undefined, 'x', 42, {}, { status: 'connected' }, { status: 'connected', publicKey: 'bogus' }]) {
+    assert.equal(mergePersistedFreighterState(bad, current), current);
+  }
+  assert.equal(
+    mergePersistedFreighterState({ status: 'disconnected', publicKey: validPublicKey }, current),
+    current,
+  );
+});
+
+test('connection status and public key are written to storage', async () => {
+  const storage = createMemoryStorage();
+  await withWindowStorage(storage, () => {
+    useFreighterStore.getState().disconnect();
+    useFreighterStore.getState().updatePublicKey(validPublicKey);
+    useFreighterStore.setState({ networkPassphrase: 'Test SDF Network ; September 2015' });
+  });
+
+  const persisted = readPersisted(storage);
+  assert.deepEqual(persisted?.state, { status: 'connected', publicKey: validPublicKey });
+  assert.ok(!('networkPassphrase' in (persisted?.state ?? {})));
+});
+
+test('disconnecting clears the persisted connection', async () => {
+  const storage = createMemoryStorage();
+  await withWindowStorage(storage, () => {
+    useFreighterStore.getState().updatePublicKey(validPublicKey);
+    useFreighterStore.getState().disconnect();
+  });
+
+  assert.deepEqual(readPersisted(storage)?.state, { status: 'disconnected', publicKey: null });
+});
+
+test('rehydrate restores the connection after a simulated reload', async () => {
+  const storage = createMemoryStorage();
+
+  await withWindowStorage(storage, async () => {
+    useFreighterStore.setState({ status: 'disconnected', publicKey: null, networkPassphrase: null });
+    // A reload starts from defaults and finds the previous session's snapshot.
+    storage.setItem(
+      FREIGHTER_PERSIST_KEY,
+      JSON.stringify({ state: { status: 'connected', publicKey: validPublicKey }, version: 1 }),
+    );
+    await useFreighterStore.persist.rehydrate();
+  });
+
+  const state = useFreighterStore.getState();
+  assert.equal(state.status, 'connected');
+  assert.equal(state.publicKey, validPublicKey);
+  assert.equal(state.networkPassphrase, null);
+});
+
+test('rehydrate rejects a tampered public key', async () => {
+  const storage = createMemoryStorage();
+
+  await withWindowStorage(storage, async () => {
+    useFreighterStore.setState({ status: 'disconnected', publicKey: null });
+    storage.setItem(
+      FREIGHTER_PERSIST_KEY,
+      JSON.stringify({ state: { status: 'connected', publicKey: 'not-a-stellar-key' }, version: 1 }),
+    );
+    await useFreighterStore.persist.rehydrate();
+  });
+
+  assert.equal(useFreighterStore.getState().status, 'disconnected');
+  assert.equal(useFreighterStore.getState().publicKey, null);
+});
+
+test('rehydrate survives corrupt JSON in storage', async () => {
+  const storage = createMemoryStorage();
+
+  await withWindowStorage(storage, async () => {
+    useFreighterStore.setState({ status: 'disconnected', publicKey: null });
+    storage.setItem(FREIGHTER_PERSIST_KEY, '{not json');
+    await useFreighterStore.persist.rehydrate();
+  });
+
+  assert.equal(useFreighterStore.getState().status, 'disconnected');
+});
+
+test('store works without window (SSR) and with a throwing localStorage', async () => {
+  assert.equal(typeof window, 'undefined');
+  useFreighterStore.getState().updatePublicKey(validPublicKey);
+  await useFreighterStore.persist.rehydrate();
+  useFreighterStore.getState().disconnect();
+
+  const throwing: StorageLike = {
+    getItem: () => {
+      throw new Error('blocked');
+    },
+    setItem: () => {
+      throw new Error('quota');
+    },
+    removeItem: () => {
+      throw new Error('blocked');
+    },
+  };
+  await withWindowStorage(throwing, async () => {
+    useFreighterStore.getState().updatePublicKey(validPublicKey);
+    await useFreighterStore.persist.rehydrate();
+    useFreighterStore.getState().disconnect();
+  });
+
+  assert.equal(useFreighterStore.getState().status, 'disconnected');
 });

@@ -2,6 +2,8 @@
 
 import { create } from 'zustand';
 import type { StateCreator } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { safeLocalStorage } from './safe-storage';
 
 export type FreighterConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'locked';
 
@@ -194,7 +196,47 @@ const resolvePassphrase = (value: unknown): string | null => {
  */
 let walletWatcher: { stop: () => void } | null = null;
 
-const storeCreator: StateCreator<FreighterWalletState> = (set, get) => ({
+/** True once the persisted snapshot has been merged into the live store. */
+let persistedStateRestored = false;
+
+/** localStorage key for the persisted Freighter connection snapshot. */
+export const FREIGHTER_PERSIST_KEY = 'astroid-freighter-wallet';
+
+/**
+ * The only slice of wallet state that survives a reload. The live network
+ * passphrase is deliberately excluded: the signing gate must always re-read it
+ * from the extension and fail closed, never trust a stored value.
+ */
+export interface PersistedFreighterState {
+  status: 'connected' | 'disconnected';
+  publicKey: string | null;
+}
+
+/** Persist the connection only while it is healthy and its key is valid. */
+export const partializeFreighterState = (
+  state: Pick<FreighterWalletState, 'status' | 'publicKey'>,
+): PersistedFreighterState =>
+  state.status === 'connected' && isValidStellarAddress(state.publicKey)
+    ? { status: 'connected', publicKey: state.publicKey }
+    : { status: 'disconnected', publicKey: null };
+
+/**
+ * Validates whatever came out of storage (it may be stale, hand-edited or from
+ * another version) before it is merged into the live store. Anything malformed
+ * leaves the default disconnected state untouched.
+ */
+export const mergePersistedFreighterState = (
+  persisted: unknown,
+  current: FreighterWalletState,
+): FreighterWalletState => {
+  if (!persisted || typeof persisted !== 'object') return current;
+  const { status, publicKey } = persisted as Partial<PersistedFreighterState>;
+  if (status !== 'connected' || !isValidStellarAddress(publicKey)) return current;
+  // Optimistic until `hydrate()` confirms the extension still agrees.
+  return { ...current, status: 'connected', publicKey };
+};
+
+const storeCreator: StateCreator<FreighterWalletState, [], [['zustand/persist', unknown]]> = (set, get) => ({
   status: 'disconnected',
   isInstalled: false,
   publicKey: null,
@@ -422,6 +464,15 @@ const storeCreator: StateCreator<FreighterWalletState> = (set, get) => ({
   },
 
   hydrate: async () => {
+    // Restore the persisted snapshot first (client only; see skipHydration
+    // below) so a reload keeps the last connection while the extension is
+    // re-verified.
+    // Only once: `hydrate()` also runs on a poll, and later runs must not
+    // re-merge a stored snapshot over fresher in-memory state.
+    if (!persistedStateRestored) {
+      persistedStateRestored = true;
+      await useFreighterStore.persist.rehydrate();
+    }
     try {
       const freighter = await getFreighter();
       const connectedResult = typeof freighter.isConnected === 'function'
@@ -488,5 +539,16 @@ const storeCreator: StateCreator<FreighterWalletState> = (set, get) => ({
   },
 });
 
-export const useFreighterStore = create<FreighterWalletState>()(storeCreator);
+export const useFreighterStore = create<FreighterWalletState>()(
+  persist(storeCreator, {
+    name: FREIGHTER_PERSIST_KEY,
+    version: 1,
+    storage: createJSONStorage(() => safeLocalStorage),
+    partialize: partializeFreighterState,
+    merge: mergePersistedFreighterState,
+    // Rehydrating during store creation would make the first client render
+    // differ from the server HTML. `hydrate()` rehydrates from an effect.
+    skipHydration: true,
+  }),
+);
 export const isValidStellarPublicKey = isValidStellarAddress;

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { safeLocalStorage } from './safe-storage';
 import { useThemeStore, type ThemeMode } from './theme-store';
 
 export type OrgId = string;
@@ -8,30 +9,6 @@ export type OrgId = string;
 export type DashboardDensity = 'comfortable' | 'compact';
 export type DashboardCurrency = 'USD' | 'USDC';
 export type CashflowDisplay = 'area' | 'line';
-
-const safeLocalStorage: StateStorage = {
-  getItem: (name) => {
-    try {
-      return typeof window === 'undefined' ? null : window.localStorage.getItem(name);
-    } catch {
-      return null;
-    }
-  },
-  setItem: (name, value) => {
-    try {
-      if (typeof window !== 'undefined') window.localStorage.setItem(name, value);
-    } catch {
-      return;
-    }
-  },
-  removeItem: (name) => {
-    try {
-      if (typeof window !== 'undefined') window.localStorage.removeItem(name);
-    } catch {
-      return;
-    }
-  },
-};
 
 /** Channel-level notification toggles. */
 export interface NotificationPreferences {
