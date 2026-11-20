@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type RefObject } from 'react';
+import { focusTrapStack } from './focusTrapStack';
 
 /**
  * Elements that can receive focus through sequential keyboard navigation.
@@ -64,6 +65,8 @@ export interface UseFocusTrapOptions {
  * - Calls `onEscape` when Escape is pressed.
  * - Locks body scrolling.
  * - Restores focus to the trigger when closed.
+ * - Participates in a shared trap stack: when overlays are nested, only the
+ *   innermost one handles Tab/Escape (see `focusTrapStack`).
  *
  * The effect depends only on `active` and the container ref. Callbacks are
  * stored in refs so unstable inline handlers do not re-capture the trigger and
@@ -112,9 +115,19 @@ export function useFocusTrap({
       target.focus({ preventScroll: true });
     };
 
+    const layer = focusTrapStack.push();
+
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Nested overlays: only the innermost trap reacts, so one Escape closes
+      // one layer and an outer trap never pulls focus out of an inner dialog.
+      if (!focusTrapStack.isTop(layer)) return;
+
       if (event.key === 'Escape') {
-        onEscapeRef.current?.();
+        if (onEscapeRef.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          onEscapeRef.current();
+        }
         return;
       }
 
@@ -156,6 +169,7 @@ export function useFocusTrap({
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      focusTrapStack.release(layer);
 
       if (optionsRef.current.lockScroll) {
         document.body.style.overflow = previousOverflow;

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { useAssistantStore } from '@/stores/ui-store';
 import { useAssistantSeed, useBriefing } from '@/hooks/use-queries';
+import { focusTrapStack } from '@/hooks/focusTrapStack';
 import { cn } from '@/lib/cn';
 import { env, isMockMode } from '@/lib/env';
 import type { ChatMessage } from '@/types/domain';
@@ -37,6 +38,13 @@ export function AssistantDrawer() {
   const pendingPrompt = useAssistantStore((s) => s.pendingPrompt);
   const seedQuery = useAssistantSeed();
   const briefingQuery = useBriefing();
+  // Keyboard/a11y: focus moves to the composer on open and returns to the
+  // trigger on close; Escape defers to stacked modals; when closed the
+  // widget is hidden from the tab order and assistive tech.
+  // The drawer renders once in the dashboard shell, so a static id is unique.
+  const headingId = 'assistant-drawer-title';
+  const panelRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -82,13 +90,54 @@ export function AssistantDrawer() {
     if (open) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [open, messages]);
 
+  // Focus management: composer on open, trigger on close.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+    const panel = panelRef.current;
+    if (!open || !panel) return undefined;
+    returnFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // The wrapper's `visibility` transitions from `hidden`, and browsers refuse
+    // to focus an element that is still computed hidden at that instant. Retry
+    // each frame (bounded) until focus actually lands in the composer.
+    let frame = 0;
+    let attempts = 0;
+    const focusComposer = () => {
+      const composer = panel.querySelector<HTMLElement>('#financial-briefing-prompt');
+      composer?.focus({ preventScroll: true });
+      attempts += 1;
+      if (composer && document.activeElement !== composer && attempts < 30) {
+        frame = window.requestAnimationFrame(focusComposer);
+      }
+    };
+    frame = window.requestAnimationFrame(focusComposer);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      const active = document.activeElement;
+      const focusWasInDrawer =
+        !active || active === document.body || panel.contains(active);
+      const target = returnFocusRef.current;
+      if (focusWasInDrawer && target && document.contains(target)) {
+        target.focus({ preventScroll: true });
+      }
+    };
+  }, [open]);
+
+  // Escape closes the (non-modal) assistant only while it is open, only when
+  // focus is in it (or nowhere), and never while a modal dialog is stacked
+  // above it — that dialog's focus trap owns Escape.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (focusTrapStack.size() > 0) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && !panelRef.current?.contains(active)) return;
+      setOpen(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [setOpen]);
+  }, [open, setOpen]);
 
   const send = async (text: string) => {
     const trimmed = text.trim();
@@ -160,13 +209,17 @@ export function AssistantDrawer() {
         className={cn(
           'fixed bottom-6 right-6 z-50 flex flex-col items-end justify-end transition-all duration-base ease-astroid sm:bottom-8 sm:right-8',
           open
-            ? 'pointer-events-auto origin-bottom-right scale-100 opacity-100'
-            : 'pointer-events-none origin-bottom-right scale-95 opacity-0',
+            ? 'pointer-events-auto visible origin-bottom-right scale-100 opacity-100'
+            : // `invisible` removes the closed widget's controls from the tab
+              // order (an opacity-0 panel used to keep them focusable).
+              'pointer-events-none invisible origin-bottom-right scale-95 opacity-0',
         )}
+        aria-hidden={!open}
       >
         <div
+          ref={panelRef}
           role="dialog"
-          aria-label="AI Executive Command Terminal"
+          aria-labelledby={headingId}
           aria-modal="false"
           className="shadow-raised relative flex h-[580px] max-h-[calc(100vh-120px)] w-[400px] max-w-[calc(100vw-48px)] flex-col overflow-hidden rounded-card border border-border-strong bg-surface/95 backdrop-blur-xl"
         >
@@ -176,7 +229,7 @@ export function AssistantDrawer() {
                 <Sparkles className="h-4 w-4" aria-hidden />
               </span>
               <div>
-                <h3 className="font-display text-sm font-semibold leading-tight">
+                <h3 id={headingId} className="font-display text-sm font-semibold leading-tight">
                   Command Terminal
                 </h3>
                 <p className="text-2xs text-foreground-secondary">
