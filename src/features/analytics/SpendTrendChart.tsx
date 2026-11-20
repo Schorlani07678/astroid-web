@@ -18,6 +18,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  chartMarginsFor,
+  chartTickFontSize,
+  chartYAxisWidth,
+  isCompactChartWidth,
+  responsiveContainerProps,
+} from '@/components/charts/responsive';
+import { useChartWidth } from '@/components/charts/use-chart-width';
 import { cn } from '@/lib/cn';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 
@@ -75,7 +83,7 @@ export function SpendTrendTooltip({ active, payload, asset }: SpendTrendTooltipP
   if (!bucket) return null;
 
   return (
-    <div className="glass min-w-[180px] rounded-md px-3 py-2 text-xs shadow-soft-2">
+    <div className="glass min-w-[160px] max-w-[220px] rounded-md px-3 py-2 text-xs shadow-soft-2 sm:min-w-[180px]">
       <time
         dateTime={bucket.timestamp}
         className="block text-2xs font-medium text-foreground-secondary"
@@ -116,6 +124,8 @@ export function SpendTrendChart({
   const mounted = useMounted();
   const [interval, setInterval] = useState<SpendTrendInterval>(defaultInterval);
   const gradientId = `spend-trend-${useId().replace(/:/g, '')}`;
+  const { ref: chartRef, width: chartWidth } = useChartWidth<HTMLDivElement>();
+  const compact = isCompactChartWidth(chartWidth);
 
   const buckets = useMemo(() => aggregateSpendTrend(data, interval), [data, interval]);
 
@@ -196,11 +206,9 @@ export function SpendTrendChart({
                 Total {formatCurrency(total, asset, { compact: true })}
               </span>
             </div>
-            <ResponsiveContainer width="100%" height={height}>
-              <AreaChart
-                data={buckets}
-                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-              >
+            <div ref={chartRef} className="w-full min-w-0" style={{ height }}>
+              <ResponsiveContainer {...responsiveContainerProps()}>
+                <AreaChart data={buckets} margin={chartMarginsFor(chartWidth, { top: 8, right: 8, left: 0, bottom: 0 })}>
                 <defs>
                   <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={SPEND_COLOR} stopOpacity={0.3} />
@@ -213,17 +221,17 @@ export function SpendTrendChart({
                   tickFormatter={(value: string) =>
                     formatSpendTrendLabel(value, interval)
                   }
-                  tick={axisTick}
+                  tick={{ ...axisTick, fontSize: chartTickFontSize(chartWidth) }}
                   axisLine={{ stroke: AXIS }}
                   tickLine={false}
-                  minTickGap={28}
+                  minTickGap={compact ? 16 : 28}
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={axisTick}
+                  tick={{ ...axisTick, fontSize: chartTickFontSize(chartWidth) }}
                   axisLine={false}
                   tickLine={false}
-                  width={56}
+                  width={chartYAxisWidth(chartWidth, 56)}
                   tickFormatter={(value: number) =>
                     formatCurrency(value, asset, { compact: true })
                   }
@@ -246,8 +254,9 @@ export function SpendTrendChart({
                   strokeWidth={2}
                   fill={`url(#${gradientId})`}
                 />
-              </AreaChart>
-            </ResponsiveContainer>
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
             <figcaption className="sr-only">{summary}</figcaption>
           </figure>
         )}
