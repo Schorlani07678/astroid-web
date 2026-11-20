@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useState } from 'react';
+import { isMockMode } from '@/lib/env';
 import { formatQueryKey, getQueryErrorMessage, isRetryableQueryError } from '@/lib/query-error-handling';
 
 /**
@@ -50,6 +51,9 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
             retry: (failureCount, error) => isRetryableQueryError(error) && failureCount < 2,
             refetchOnWindowFocus: false,
             refetchOnReconnect: true,
+            // Mock data is served locally, so it must keep working offline;
+            // live mode pauses fetches until the browser is back online.
+            networkMode: isMockMode ? 'always' : 'online',
           },
           mutations: {
             retry: 0,

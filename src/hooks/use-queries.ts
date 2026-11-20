@@ -1,6 +1,11 @@
 'use client';
 
 import { useMutation, useQuery, type UseQueryResult } from '@tanstack/react-query';
+import {
+  POLL_INTERVALS,
+  QUERY_CACHE,
+  createBackoffRefetchInterval,
+} from '@/lib/query-config';
 import { queryKeys } from '@/services/query-keys';
 import { resources } from '@/services/resources';
 import type { HorizonBalance } from '@/features/wallet/types';
@@ -36,10 +41,14 @@ import type { AuditEvent } from '@/types/audit';
 
 // -- session / org ----------------------------------------------------------
 export const useCurrentUser = (): UseQueryResult<User> =>
-  useQuery({ queryKey: queryKeys.session, queryFn: resources.getCurrentUser });
+  useQuery({ queryKey: queryKeys.session, queryFn: resources.getCurrentUser, ...QUERY_CACHE.static });
 
 export const useOrganizations = (): UseQueryResult<Organization[]> =>
-  useQuery({ queryKey: queryKeys.organizations, queryFn: () => resources.getOrganizations() });
+  useQuery({
+    queryKey: queryKeys.organizations,
+    queryFn: () => resources.getOrganizations(),
+    ...QUERY_CACHE.static,
+  });
 
 export const useTeam = (): UseQueryResult<User[]> =>
   useQuery({ queryKey: queryKeys.team, queryFn: () => resources.getTeam() });
@@ -60,17 +69,22 @@ export const useAssistantSeed = (): UseQueryResult<ChatMessage[]> =>
 
 // -- wallets ----------------------------------------------------------------
 export const useWallets = (): UseQueryResult<Wallet[]> =>
-  useQuery({ queryKey: queryKeys.wallets, queryFn: () => resources.getWallets() });
+  useQuery({
+    queryKey: queryKeys.wallets,
+    queryFn: () => resources.getWallets(),
+    ...QUERY_CACHE.entity,
+  });
 
 export const useWallet = (id: string): UseQueryResult<Wallet> =>
   useQuery({
     queryKey: queryKeys.wallet(id),
     queryFn: () => resources.getWallet(id),
     enabled: Boolean(id),
+    ...QUERY_CACHE.entity,
   });
 
 export interface WalletBalancesQueryOptions {
-  /** Poll cadence in ms; `0` polls only on demand. Defaults to 30s. */
+  /** Base poll cadence in ms (backs off while fetches fail); `0` polls only on demand. Defaults to 30s. */
   pollIntervalMs?: number;
   /** How long a balances payload stays fresh. Defaults to 15s. */
   staleTimeMs?: number;
@@ -87,14 +101,23 @@ export const useWalletBalances = (
   id: string,
   options: WalletBalancesQueryOptions = {},
 ): UseQueryResult<AssetBalance[]> => {
-  const { pollIntervalMs = 30_000, staleTimeMs = 15_000, enabled = true } = options;
+  const {
+    pollIntervalMs = POLL_INTERVALS.balances,
+    staleTimeMs = QUERY_CACHE.live.staleTime,
+    enabled = true,
+  } = options;
 
   return useQuery({
     queryKey: queryKeys.walletBalances(id),
     queryFn: () => resources.getWalletBalances(id),
     enabled: Boolean(id) && enabled,
     staleTime: staleTimeMs,
-    refetchInterval: pollIntervalMs > 0 ? pollIntervalMs : false,
+    gcTime: QUERY_CACHE.live.gcTime,
+    // Backs off exponentially while the backend is failing, resets on success.
+    refetchInterval:
+      pollIntervalMs > 0 ? createBackoffRefetchInterval({ baseMs: pollIntervalMs }) : false,
+    // Hidden tabs never poll; focus only refetches when the data is stale.
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
 };
@@ -105,17 +128,23 @@ export const useWalletTrustlines = (id: string): UseQueryResult<HorizonBalance[]
     queryKey: queryKeys.walletTrustlines(id),
     queryFn: () => resources.getWalletTrustlines(id),
     enabled: Boolean(id),
+    ...QUERY_CACHE.entity,
   });
 
 // -- agents -----------------------------------------------------------------
 export const useAgents = (): UseQueryResult<Agent[]> =>
-  useQuery({ queryKey: queryKeys.agents, queryFn: () => resources.getAgents() });
+  useQuery({
+    queryKey: queryKeys.agents,
+    queryFn: () => resources.getAgents(),
+    ...QUERY_CACHE.entity,
+  });
 
 export const useAgent = (id: string): UseQueryResult<Agent> =>
   useQuery({
     queryKey: queryKeys.agent(id),
     queryFn: () => resources.getAgent(id),
     enabled: Boolean(id),
+    ...QUERY_CACHE.entity,
   });
 
 // -- policies ---------------------------------------------------------------
@@ -188,7 +217,9 @@ export const useAssetRates = (): UseQueryResult<AssetRate[]> =>
   useQuery({
     queryKey: queryKeys.rates,
     queryFn: () => resources.getAssetRates(),
-    refetchInterval: 30_000,
+    ...QUERY_CACHE.live,
+    refetchInterval: createBackoffRefetchInterval({ baseMs: POLL_INTERVALS.balances }),
+    refetchIntervalInBackground: false,
   });
 
 // -- notifications ----------------------------------------------------------

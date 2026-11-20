@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAssetRates } from '@/hooks/use-queries';
+import { QUERY_CACHE, createBackoffRefetchInterval } from '@/lib/query-config';
 import { queryKeys } from '@/services/query-keys';
 import {
   StellarAccountError,
@@ -131,8 +132,12 @@ export function useStellarAccount(
     queryFn: ({ signal }) => fetchStellarAccountSnapshot(publicKey, { signal, timeoutMs }),
     enabled: canQuery,
     staleTime: staleTimeMs,
+    gcTime: QUERY_CACHE.live.gcTime,
+    // Exponential backoff while Horizon is failing; resets after a success.
     refetchInterval:
-      canQuery && pollIntervalMs !== false && pollIntervalMs > 0 ? pollIntervalMs : false,
+      canQuery && pollIntervalMs !== false && pollIntervalMs > 0
+        ? createBackoffRefetchInterval({ baseMs: pollIntervalMs })
+        : false,
     // Background polling would burn Horizon rate limits on a hidden tab.
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,

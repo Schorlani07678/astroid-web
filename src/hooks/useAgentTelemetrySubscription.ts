@@ -46,6 +46,8 @@ export function useAgentTelemetrySubscription(): UseAgentTelemetrySubscriptionRe
     if (!client) {
       setStatus('offline');
       const interval = setInterval(() => {
+        // Hidden tabs skip the tick; focus/mount refetch handles catch-up.
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
         queryClient.invalidateQueries({ queryKey: queryKeys.agents });
         queryClient.invalidateQueries({ queryKey: queryKeys.wallets });
         queryClient.invalidateQueries({ queryKey: queryKeys.proposals });
