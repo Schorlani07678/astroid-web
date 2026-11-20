@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, ShieldCheck, Wallet } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
@@ -53,6 +53,11 @@ export function ProposalApprovalConfirmDialog({
 
   const [isSigning, setIsSigning] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
+  // Synchronous double-submit guard: `busy` comes from React state, so two
+  // clicks in the same tick would both observe `false` before the re-render.
+  const submitGuardRef = useRef(false);
+  // Safe default focus target for a destructive confirmation.
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
   const isApprove = action === 'approved';
   const isRequestChanges = action === 'changes_requested';
@@ -67,44 +72,44 @@ export function ProposalApprovalConfirmDialog({
   }, [open, action]);
 
   const handleConfirm = async () => {
-    if (!action || busy) return;
+    if (!action || busy || submitGuardRef.current) return;
+    submitGuardRef.current = true;
     setSignError(null);
 
-    // Optional wallet signature round-trip before the decision is recorded.
-    if (isApprove && xdr) {
-      if (!isConnected) {
-        const message =
-          'Freighter wallet is not connected. Reconnect the extension and try again.';
-        setSignError(message);
-        toast.error(message);
-        return;
-      }
-      setIsSigning(true);
-      try {
-        const signedXdr = await signTransaction(xdr);
-        if (!signedXdr) {
-          // Hook already surfaced its own error; treat as a cancelled signing.
-          const message = 'Signing was cancelled or failed in the wallet.';
+    try {
+      // Optional wallet signature round-trip before the decision is recorded.
+      if (isApprove && xdr) {
+        if (!isConnected) {
+          const message =
+            'Freighter wallet is not connected. Reconnect the extension and try again.';
           setSignError(message);
           toast.error(message);
-          setIsSigning(false);
           return;
         }
-        toast.success('Transaction signed with Freighter');
-      } catch (error) {
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : 'Wallet signing failed. The decision was not recorded.';
-        setSignError(message);
-        toast.error(message);
-        setIsSigning(false);
-        return;
+        setIsSigning(true);
+        try {
+          const signedXdr = await signTransaction(xdr);
+          if (!signedXdr) {
+            // Hook already surfaced its own error; treat as a cancelled signing.
+            const message = 'Signing was cancelled or failed in the wallet.';
+            setSignError(message);
+            toast.error(message);
+            return;
+          }
+          toast.success('Transaction signed with Freighter');
+        } catch (error) {
+          const message =
+            error instanceof Error && error.message
+              ? error.message
+              : 'Wallet signing failed. The decision was not recorded.';
+          setSignError(message);
+          toast.error(message);
+          return;
+        } finally {
+          setIsSigning(false);
+        }
       }
-      setIsSigning(false);
-    }
 
-    try {
       let succeeded = false;
       if (isApprove) {
         succeeded = await approve();
@@ -116,6 +121,8 @@ export function ProposalApprovalConfirmDialog({
       if (succeeded) onClose();
     } catch {
       // Decision failures already toast inside the approval hook.
+    } finally {
+      submitGuardRef.current = false;
     }
   };
 
@@ -146,9 +153,11 @@ export function ProposalApprovalConfirmDialog({
       }
       size="md"
       className={className}
+      initialFocusRef={cancelButtonRef}
       footer={
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
           <Button
+            ref={cancelButtonRef}
             type="button"
             variant="outline"
             onClick={handleCancel}
@@ -186,7 +195,7 @@ export function ProposalApprovalConfirmDialog({
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-4" aria-busy={busy}>
         {/* Screen reader context ------------------------------------------- */}
         <p role="status" aria-live="polite" className="sr-only">
           {busy
