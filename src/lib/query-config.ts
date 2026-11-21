@@ -31,6 +31,8 @@ export const QUERY_CACHE = {
   static: { staleTime: 10 * MINUTE, gcTime: 30 * MINUTE },
   entity: { staleTime: 30 * SECOND, gcTime: 10 * MINUTE },
   live: { staleTime: 15 * SECOND, gcTime: 5 * MINUTE },
+  metrics: { staleTime: 60 * SECOND, gcTime: 10 * MINUTE },
+  agentStatus: { staleTime: 30 * SECOND, gcTime: 5 * MINUTE },
 } as const satisfies Record<string, QueryCachePreset>;
 
 export const POLL_INTERVALS = {
@@ -38,7 +40,38 @@ export const POLL_INTERVALS = {
   balances: 30 * SECOND,
   /** Network/telemetry health, where freshness matters more. */
   telemetry: 15 * SECOND,
+  /** Financial overview and budget metrics. */
+  metrics: 60 * SECOND,
+  /** Agent operational status updates. */
+  agentStatus: 30 * SECOND,
 } as const;
+
+export const RETRY_CONFIG = {
+  /** Explicit maximum number of retries for transient queries. */
+  maxRetries: 3,
+  /** Base delay before the first retry in milliseconds. */
+  baseDelayMs: 1_000,
+  /** Cap on the retry interval in milliseconds. */
+  maxDelayMs: 30_000,
+  /** Exponential backoff multiplier per attempt. */
+  factor: 2,
+} as const;
+
+/**
+ * Computes exponential backoff delay for query retries:
+ * attempt 0 -> 1000ms, attempt 1 -> 2000ms, attempt 2 -> 4000ms, capped at maxDelayMs.
+ */
+export function queryRetryDelay(
+  attemptIndex: number,
+  options: { baseDelayMs?: number; maxDelayMs?: number; factor?: number } = {},
+): number {
+  const base = options.baseDelayMs ?? RETRY_CONFIG.baseDelayMs;
+  const max = options.maxDelayMs ?? RETRY_CONFIG.maxDelayMs;
+  const factor = options.factor ?? RETRY_CONFIG.factor;
+  const attempt = Number.isFinite(attemptIndex) ? Math.max(0, Math.floor(attemptIndex)) : 0;
+  const delay = base * Math.pow(factor, attempt);
+  return Math.min(Number.isFinite(delay) ? delay : max, max);
+}
 
 export interface BackoffOptions {
   /** Interval used while the last fetch succeeded. */

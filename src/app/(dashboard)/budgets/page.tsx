@@ -26,6 +26,7 @@ import { BudgetAllocationDashboard } from '@/features/budgets/components/BudgetA
 import { BudgetAllocationModal } from '@/features/budgets/BudgetAllocationModal';
 import { BudgetMatrix } from '@/features/budgets/BudgetMatrix';
 import { BudgetMeterCard } from '@/features/budgets/BudgetMeters';
+import { DepartmentBudgetMeterWidget } from '@/features/budgets/DepartmentBudgetMeterWidget';
 import { BudgetExportMenu } from '@/features/budgets/BudgetExportMenu';
 import { MOCK_DEPARTMENT_BUDGETS } from '@/features/budgets/mock-data';
 
@@ -125,7 +126,15 @@ export default function BudgetsPage() {
                 <BudgetAllocationChart data={chartData} />
               </ErrorBoundary>
 
-              <DepartmentBudgetChart data={MOCK_DEPARTMENT_BUDGETS} />
+              <ErrorBoundary section="Department budget chart">
+                <DepartmentBudgetChart data={MOCK_DEPARTMENT_BUDGETS} />
+              </ErrorBoundary>
+
+              {/* Department-level aggregated budget meter widget */}
+              <ErrorBoundary section="Department budget meters">
+                <DepartmentBudgetMeterWidget departments={MOCK_DEPARTMENT_BUDGETS} />
+              </ErrorBoundary>
+
               <ErrorBoundary section="Department budget breakdown">
                 <DepartmentBudgetBreakdown />
               </ErrorBoundary>

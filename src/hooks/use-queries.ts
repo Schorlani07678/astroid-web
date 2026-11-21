@@ -55,10 +55,18 @@ export const useTeam = (): UseQueryResult<User[]> =>
 
 // -- analytics --------------------------------------------------------------
 export const useOverview = (): UseQueryResult<AnalyticsOverview> =>
-  useQuery({ queryKey: queryKeys.overview, queryFn: resources.getOverview });
+  useQuery({
+    queryKey: queryKeys.overview,
+    queryFn: resources.getOverview,
+    ...QUERY_CACHE.metrics,
+  });
 
 export const useActivity = (): UseQueryResult<ActivityPoint[]> =>
-  useQuery({ queryKey: queryKeys.activity, queryFn: () => resources.getActivity() });
+  useQuery({
+    queryKey: queryKeys.activity,
+    queryFn: () => resources.getActivity(),
+    ...QUERY_CACHE.metrics,
+  });
 
 // -- ai assistant -----------------------------------------------------------
 export const useBriefing = (): UseQueryResult<AiBriefing> =>
@@ -136,7 +144,7 @@ export const useAgents = (): UseQueryResult<Agent[]> =>
   useQuery({
     queryKey: queryKeys.agents,
     queryFn: () => resources.getAgents(),
-    ...QUERY_CACHE.entity,
+    ...QUERY_CACHE.agentStatus,
   });
 
 export const useAgent = (id: string): UseQueryResult<Agent> =>
@@ -144,18 +152,23 @@ export const useAgent = (id: string): UseQueryResult<Agent> =>
     queryKey: queryKeys.agent(id),
     queryFn: () => resources.getAgent(id),
     enabled: Boolean(id),
-    ...QUERY_CACHE.entity,
+    ...QUERY_CACHE.agentStatus,
   });
 
 // -- policies ---------------------------------------------------------------
 export const usePolicies = (): UseQueryResult<Policy[]> =>
-  useQuery({ queryKey: queryKeys.policies, queryFn: () => resources.getPolicies() });
+  useQuery({
+    queryKey: queryKeys.policies,
+    queryFn: () => resources.getPolicies(),
+    ...QUERY_CACHE.entity,
+  });
 
 export const usePolicy = (id: string): UseQueryResult<Policy> =>
   useQuery({
     queryKey: queryKeys.policy(id),
     queryFn: () => resources.getPolicy(id),
     enabled: Boolean(id),
+    ...QUERY_CACHE.entity,
   });
 
 /** Policy simulator — a mutation so it re-runs on demand with a fresh amount. */
@@ -166,51 +179,75 @@ export const usePolicySimulation = () =>
 
 // -- budgets ----------------------------------------------------------------
 export const useBudgets = (): UseQueryResult<Budget[]> =>
-  useQuery({ queryKey: queryKeys.budgets, queryFn: () => resources.getBudgets() });
+  useQuery({
+    queryKey: queryKeys.budgets,
+    queryFn: () => resources.getBudgets(),
+    ...QUERY_CACHE.metrics,
+  });
 
 export const useBudget = (id: string): UseQueryResult<Budget> =>
   useQuery({
     queryKey: queryKeys.budget(id),
     queryFn: () => resources.getBudget(id),
     enabled: Boolean(id),
+    ...QUERY_CACHE.metrics,
   });
 
 // -- transactions -----------------------------------------------------------
 export const useTransactions = (): UseQueryResult<Transaction[]> =>
-  useQuery({ queryKey: queryKeys.transactions, queryFn: () => resources.getTransactions() });
+  useQuery({
+    queryKey: queryKeys.transactions,
+    queryFn: () => resources.getTransactions(),
+    ...QUERY_CACHE.entity,
+  });
 
 export const useTransaction = (id: string): UseQueryResult<Transaction> =>
   useQuery({
     queryKey: queryKeys.transaction(id),
     queryFn: () => resources.getTransaction(id),
     enabled: Boolean(id),
+    ...QUERY_CACHE.entity,
   });
 
 // -- proposals / approvals --------------------------------------------------
 export const useProposals = (): UseQueryResult<Proposal[]> =>
-  useQuery({ queryKey: queryKeys.proposals, queryFn: () => resources.getProposals() });
+  useQuery({
+    queryKey: queryKeys.proposals,
+    queryFn: () => resources.getProposals(),
+    ...QUERY_CACHE.entity,
+  });
 
 export const useProposal = (id: string): UseQueryResult<Proposal> =>
   useQuery({
     queryKey: queryKeys.proposal(id),
     queryFn: () => resources.getProposal(id),
     enabled: Boolean(id),
+    ...QUERY_CACHE.entity,
   });
 
 // -- financial memory -------------------------------------------------------
 export const useMemoryRecords = (): UseQueryResult<MemoryRecord[]> =>
-  useQuery({ queryKey: queryKeys.memory, queryFn: () => resources.getMemoryRecords() });
+  useQuery({
+    queryKey: queryKeys.memory,
+    queryFn: () => resources.getMemoryRecords(),
+    ...QUERY_CACHE.entity,
+  });
 
 export const useMemoryRecord = (id: string): UseQueryResult<MemoryRecord> =>
   useQuery({
     queryKey: queryKeys.memoryRecord(id),
     queryFn: () => resources.getMemoryRecord(id),
     enabled: Boolean(id),
+    ...QUERY_CACHE.entity,
   });
 
 // -- audit log ---------------------------------------------------------------
 export const useAuditEvents = (): UseQueryResult<AuditEvent[]> =>
-  useQuery({ queryKey: queryKeys.auditEvents, queryFn: () => resources.getAuditEvents() });
+  useQuery({
+    queryKey: queryKeys.auditEvents,
+    queryFn: () => resources.getAuditEvents(),
+    ...QUERY_CACHE.entity,
+  });
 
 // -- asset rates -------------------------------------------------------------
 export const useAssetRates = (): UseQueryResult<AssetRate[]> =>

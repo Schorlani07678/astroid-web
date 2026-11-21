@@ -166,8 +166,27 @@ export function ProposalDetailDrawer({ proposal, open, onClose }: ProposalDetail
             </div>
 
             <footer className="flex flex-wrap justify-end gap-2 border-t border-border bg-surface px-5 py-4 sm:px-7">
-              <Button type="button" variant="outline" onClick={() => void handleDecision('rejected')} loading={busy && activeAction === 'rejected'} disabled={proposal.status !== 'pending' || busy}>Reject</Button>
-              <Button type="button" variant="gold" leftIcon={<Check className="h-4 w-4" aria-hidden />} onClick={() => void handleDecision('approved')} loading={busy && activeAction === 'approved'} disabled={proposal.status !== 'pending' || busy}>Approve</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleDecision('rejected')}
+                loading={busy && activeAction === 'rejected'}
+                disabled={proposal.status !== 'pending' || busy}
+                aria-label={`Reject proposal ${proposal.title}`}
+              >
+                Reject
+              </Button>
+              <Button
+                type="button"
+                variant="gold"
+                leftIcon={<Check className="h-4 w-4" aria-hidden />}
+                onClick={() => void handleDecision('approved')}
+                loading={busy && activeAction === 'approved'}
+                disabled={proposal.status !== 'pending' || busy}
+                aria-label={`Approve proposal ${proposal.title}`}
+              >
+                Approve
+              </Button>
             </footer>
           </motion.aside>
         </div>

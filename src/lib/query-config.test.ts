@@ -3,8 +3,10 @@ import test from 'node:test';
 import {
   POLL_INTERVALS,
   QUERY_CACHE,
+  RETRY_CONFIG,
   backoffDelay,
   createBackoffRefetchInterval,
+  queryRetryDelay,
 } from './query-config';
 
 test('cache presets keep gcTime above staleTime so navigation reuses the cache', () => {
@@ -14,6 +16,21 @@ test('cache presets keep gcTime above staleTime so navigation reuses the cache',
   }
   assert.ok(QUERY_CACHE.live.gcTime > POLL_INTERVALS.balances);
   assert.ok(QUERY_CACHE.static.staleTime > QUERY_CACHE.entity.staleTime);
+  assert.equal(QUERY_CACHE.metrics.staleTime, 60_000);
+  assert.equal(QUERY_CACHE.agentStatus.staleTime, 30_000);
+  assert.equal(POLL_INTERVALS.metrics, 60_000);
+  assert.equal(POLL_INTERVALS.agentStatus, 30_000);
+});
+
+test('queryRetryDelay implements exponential backoff with a cap', () => {
+  assert.equal(queryRetryDelay(0), 1_000);
+  assert.equal(queryRetryDelay(1), 2_000);
+  assert.equal(queryRetryDelay(2), 4_000);
+  assert.equal(queryRetryDelay(3), 8_000);
+  assert.equal(queryRetryDelay(4), 16_000);
+  assert.equal(queryRetryDelay(5), 30_000); // capped at maxDelayMs
+  assert.equal(queryRetryDelay(100), 30_000);
+  assert.equal(RETRY_CONFIG.maxRetries, 3);
 });
 
 test('backoff starts at the base interval and doubles per failure', () => {

@@ -5,3 +5,6 @@ export type { DepartmentBudgetBreakdownProps } from './DepartmentBudgetBreakdown
 export { DepartmentBudgetChart } from './DepartmentBudgetChart';
 export * from './components/BudgetAllocationDashboard';
 export { default as BudgetAllocationDashboard } from './components/BudgetAllocationDashboard';
+export * from './departmentBudgetMeter';
+export * from './DepartmentBudgetMeterWidget';
+export { default as DepartmentBudgetMeterWidget } from './DepartmentBudgetMeterWidget';
