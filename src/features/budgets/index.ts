@@ -8,3 +8,6 @@ export { default as BudgetAllocationDashboard } from './components/BudgetAllocat
 export * from './departmentBudgetMeter';
 export * from './DepartmentBudgetMeterWidget';
 export { default as DepartmentBudgetMeterWidget } from './DepartmentBudgetMeterWidget';
+export * from './departmentBudgetTable';
+export { DepartmentBudgetAllocationTable } from './DepartmentBudgetAllocationTable';
+export type { DepartmentBudgetAllocationTableProps } from './DepartmentBudgetAllocationTable';
