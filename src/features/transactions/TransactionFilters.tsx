@@ -1,10 +1,11 @@
 'use client';
 
-import { FileSpreadsheet, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import type { Transaction, TransactionStatus } from '@/types/domain';
 import type { TransactionFilterValues } from './filterTransactions';
+import { TransactionExportActions } from './TransactionExportActions';
 
 interface TransactionFiltersProps {
   transactions: Transaction[];
@@ -13,6 +14,7 @@ interface TransactionFiltersProps {
   filteredCount: number;
   onChange: (value: TransactionFilterValues) => void;
   onExportCSV?: (transactions: Transaction[]) => void;
+  onExportJSON?: (transactions: Transaction[]) => void;
 }
 
 const STATUSES: TransactionStatus[] = [
@@ -35,6 +37,7 @@ export function TransactionFilters({
   filteredCount,
   onChange,
   onExportCSV,
+  onExportJSON,
 }: TransactionFiltersProps) {
   const assets = Array.from(
     new Set(transactions.map((transaction) => transaction.asset)),
@@ -183,17 +186,11 @@ export function TransactionFilters({
             </Button>
           )}
         </div>
-        {onExportCSV && (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => onExportCSV(visibleTransactions)}
-          >
-            <FileSpreadsheet className="mr-1.5 h-4 w-4" aria-hidden />
-            Export CSV
-          </Button>
-        )}
+        <TransactionExportActions
+          rows={visibleTransactions}
+          onExportCSV={onExportCSV}
+          onExportJSON={onExportJSON}
+        />
       </div>
     </section>
   );
