@@ -16,6 +16,8 @@ import { cn } from '@/lib/cn';
 import { formatCurrency, formatRelativeTime } from '@/lib/format';
 import type { Proposal } from '@/types/domain';
 
+import { ApprovalStatusLiveRegion } from './ApprovalStatusLiveRegion';
+
 export interface ProposalApprovalConfirmDialogProps {
   proposal: Proposal;
   /** Which decision the user initiated from the card: approve or reject. */
@@ -62,6 +64,16 @@ export function ProposalApprovalConfirmDialog({
   const isApprove = action === 'approved';
   const isRequestChanges = action === 'changes_requested';
   const busy = isProcessing || isSigning;
+  // The risk note is the only target of the confirm button's aria-describedby.
+  // Never leave a dangling ID reference for lower-scored proposals.
+  const showRiskNote = proposal.riskScore >= 70;
+  const liveMessage = busy
+    ? isSigning
+      ? 'Waiting for wallet signature.'
+      : 'Recording your decision.'
+    : decision
+      ? `Your decision (${decision}) has been recorded.`
+      : `Reviewing ${isApprove ? 'approval' : 'rejection'} of proposal ${proposal.title}.`;
 
   // Reset transient signing state whenever the dialog is (re)opened.
   useEffect(() => {
@@ -184,7 +196,7 @@ export function ProposalApprovalConfirmDialog({
                   ? `Request changes to ${proposal.title}`
                   : `Confirm rejection of ${proposal.title}`
             }
-            aria-describedby="proposal-confirm-risk-note"
+            aria-describedby={showRiskNote ? 'proposal-confirm-risk-note' : undefined}
           >
             {isApprove
               ? 'Confirm approval'
@@ -197,13 +209,7 @@ export function ProposalApprovalConfirmDialog({
     >
       <div className="space-y-4" aria-busy={busy}>
         {/* Screen reader context ------------------------------------------- */}
-        <p role="status" aria-live="polite" className="sr-only">
-          {busy
-            ? isSigning
-              ? 'Waiting for wallet signature.'
-              : 'Recording your decision.'
-            : `Reviewing ${isApprove ? 'approval' : 'rejection'} of proposal ${proposal.title}.`}
-        </p>
+        <ApprovalStatusLiveRegion message={liveMessage} />
 
         {/* Proposal summary ------------------------------------------------- */}
         <div className="flex items-center justify-between rounded-card border border-border bg-surface-secondary/40 px-4 py-3">
@@ -281,7 +287,7 @@ export function ProposalApprovalConfirmDialog({
           </div>
         )}
 
-        {proposal.riskScore >= 70 && (
+        {showRiskNote && (
           <p
             id="proposal-confirm-risk-note"
             className={cn(
@@ -303,7 +309,7 @@ export function ProposalApprovalConfirmDialog({
           </p>
         )}
         {decision && (
-          <p role="status" className="text-xs font-medium text-success">
+          <p className="text-xs font-medium text-success">
             Your decision ({decision}) has been recorded.
           </p>
         )}

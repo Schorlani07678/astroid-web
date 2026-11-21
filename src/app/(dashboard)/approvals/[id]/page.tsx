@@ -31,6 +31,7 @@ import { TransactionSigningModal } from '@/features/wallet/components/Transactio
 import { mockMultisigRequest } from '@/features/approvals/fixtures/multisig';
 import { ProposalAuditTrail } from '@/features/approvals/components/ProposalAuditTrail';
 import { ProposalTimeline } from '@/features/approvals/components/ProposalTimeline';
+import { ApprovalStatusLiveRegion } from '@/features/approvals/components/ApprovalStatusLiveRegion';
 
 const decisionMeta: Record<
   ApprovalDecision['decision'],
@@ -68,9 +69,15 @@ function ApprovalDecisionActions({ proposal }: { proposal: Proposal }) {
 
   const disabled = isProcessing || decision !== null;
 
+  const decisionAnnouncement = decision
+    ? `You ${decision} this proposal. ${approvedWeight} of ${requiredApprovals} signatures collected.`
+    : '';
+
   return (
     <div className="flex flex-wrap items-center gap-3">
+      <ApprovalStatusLiveRegion message={decisionAnnouncement} />
       <Button
+        type="button"
         variant="gold"
         size="sm"
         leftIcon={<Check className="h-4 w-4" aria-hidden />}
@@ -81,6 +88,7 @@ function ApprovalDecisionActions({ proposal }: { proposal: Proposal }) {
         {decision === 'approved' ? 'Approved' : 'Approve'}
       </Button>
       <Button
+        type="button"
         variant="outline"
         size="sm"
         leftIcon={<X className="h-4 w-4" aria-hidden />}
@@ -92,7 +100,7 @@ function ApprovalDecisionActions({ proposal }: { proposal: Proposal }) {
       </Button>
 
       {decision && (
-        <span role="status" className="text-2xs text-foreground-secondary">
+        <span className="text-2xs text-foreground-secondary">
           You {decision} this proposal
           · {approvedWeight} of {requiredApprovals} signatures collected
         </span>

@@ -251,7 +251,7 @@ export function ApprovalModal({
         aria-describedby={descriptionId}
         tabIndex={-1}
         className={cn(
-          'relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-card border border-border bg-surface shadow-soft-3 outline-none',
+          'relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-card border border-border bg-surface shadow-soft-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
           className,
         )}
       >

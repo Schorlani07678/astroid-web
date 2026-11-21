@@ -98,7 +98,7 @@ export function Dialog({
         aria-label={title ? undefined : 'Dialog'}
         tabIndex={-1}
         className={cn(
-          'relative z-10 w-full animate-fade-up rounded-dialog border border-border bg-surface shadow-soft-3 focus:outline-none',
+          'relative z-10 w-full animate-fade-up rounded-dialog border border-border bg-surface shadow-soft-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
           sizeClass[size],
           className,
         )}
