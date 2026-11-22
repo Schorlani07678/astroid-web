@@ -13,6 +13,7 @@ import type { MemoryRecord } from '@/types/domain';
 import { PageTransition } from '@/components/ui/motion';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuditTimeline } from '@/features/audit/AuditTimeline';
+import { FinancialAuditExportMenu } from '@/features/audit/FinancialAuditExportMenu';
 
 const columns: Column<MemoryRecord>[] = [
   {
@@ -74,6 +75,7 @@ export default function AuditPage() {
         eyebrow="Govern"
         title="Audit log"
         description="An immutable trail of every governed decision and settlement — click any row to reconstruct it end to end."
+        actions={<FinancialAuditExportMenu records={records.data ?? []} />}
       />
 
       <QueryBoundary
@@ -98,8 +100,10 @@ export default function AuditPage() {
                 rowHref={(r) => `/audit/${r.id}`}
               />
             </ErrorBoundary>
-            <div className="pt-6 border-t border-border space-y-4">
-              <h3 className="font-display text-lg font-semibold tracking-tight">Organization Audit Log Stream Timeline</h3>
+            <div className="space-y-4 border-t border-border pt-6">
+              <h3 className="font-display text-lg font-semibold tracking-tight">
+                Organization Audit Log Stream Timeline
+              </h3>
               <ErrorBoundary section="Audit timeline">
                 <AuditTimeline />
               </ErrorBoundary>
