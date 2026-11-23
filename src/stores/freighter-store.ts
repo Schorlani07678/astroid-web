@@ -109,6 +109,12 @@ export class FreighterError extends Error {
   }
 }
 
+/** Deadline for any single Freighter extension call before it is treated as TIMEOUT. */
+export const FREIGHTER_TIMEOUT_MS = 15000;
+
+/** Manual retries allowed before the recovery UI suggests reloading the page. */
+export const FREIGHTER_MAX_RETRIES = 3;
+
 /** Short toast/banner headline for each error category. */
 export const FREIGHTER_ERROR_TITLES: Record<FreighterErrorCode, string> = {
   NOT_INSTALLED: 'Freighter not detected',
@@ -205,6 +211,8 @@ export interface FreighterWalletState {
   error: string | null;
   /** Category of `error`, null whenever `error` is null. */
   errorCode: FreighterErrorCode | null;
+  /** Manual reconnect attempts since the last successful connection. */
+  retryCount: number;
   /** Clears the last error without touching connection state. */
   clearError: () => void;
   checkExtension: () => Promise<boolean>;
@@ -228,6 +236,8 @@ export interface FreighterWalletState {
   updatePublicKey: (publicKey: string) => void;
   requestSignature: (xdr: string, options?: { networkPassphrase?: string }) => Promise<string>;
   hydrate: () => Promise<void>;
+  /** Re-runs the connection flow after a failure, tracking the attempt count. */
+  retryConnection: () => Promise<string | null>;
 }
 
 /** Backward-compatible names retained for consumers of the previous wallet store API. */
@@ -242,7 +252,7 @@ export type WalletActions = Pick<
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
 
-const withTimeout = async <T>(promise: Promise<T>, ms = 15000): Promise<T> => {
+const withTimeout = async <T>(promise: Promise<T>, ms = FREIGHTER_TIMEOUT_MS): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   return await new Promise<T>((resolve, reject) => {
@@ -432,6 +442,7 @@ const storeCreator: StateCreator<FreighterWalletState, [], [['zustand/persist', 
   isSigning: false,
   error: null,
   errorCode: null,
+  retryCount: 0,
 
   clearError: () => {
     set({ error: null, errorCode: null });
@@ -516,6 +527,7 @@ const storeCreator: StateCreator<FreighterWalletState, [], [['zustand/persist', 
           networkPassphrase,
           error: null,
           errorCode: null,
+          retryCount: 0,
         });
 
         return publicKey;
@@ -554,6 +566,11 @@ const storeCreator: StateCreator<FreighterWalletState, [], [['zustand/persist', 
     return connectInFlight;
   },
 
+  retryConnection: async () => {
+    set((state) => ({ retryCount: state.retryCount + 1 }));
+    return await get().connect();
+  },
+
   disconnect: () => {
     set({
       status: 'disconnected',
@@ -563,6 +580,7 @@ const storeCreator: StateCreator<FreighterWalletState, [], [['zustand/persist', 
       isSigning: false,
       error: null,
       errorCode: null,
+      retryCount: 0,
     });
   },
 
@@ -656,14 +674,14 @@ const storeCreator: StateCreator<FreighterWalletState, [], [['zustand/persist', 
       return;
     }
     if (get().status === 'connected' && get().publicKey === publicKey) return;
-    set({ status: 'connected', isInstalled: true, publicKey, error: null, errorCode: null });
+    set({ status: 'connected', isInstalled: true, publicKey, error: null, errorCode: null, retryCount: 0 });
   },
 
   updatePublicKey: (publicKey) => {
     if (!isValidStellarAddress(publicKey)) {
       throw new Error('Invalid Stellar public key.');
     }
-    set({ status: 'connected', isInstalled: true, publicKey, error: null, errorCode: null });
+    set({ status: 'connected', isInstalled: true, publicKey, error: null, errorCode: null, retryCount: 0 });
   },
 
   requestSignature: async (xdr: string, options?: { networkPassphrase?: string }) => {

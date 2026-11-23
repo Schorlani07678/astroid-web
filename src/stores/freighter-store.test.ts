@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   classifyFreighterError,
+  FREIGHTER_MAX_RETRIES,
   FREIGHTER_PERSIST_KEY,
   type FreighterApi,
   FreighterError,
@@ -11,6 +12,7 @@ import {
   STELLAR_NETWORKS,
   useFreighterStore,
 } from './freighter-store';
+import { getFreighterRecovery } from '../features/wallet/freighterErrorRecovery';
 import {
   fetchStellarWithFailover,
   normalizeEndpointUrl,
@@ -42,6 +44,7 @@ function resetStore(api: FreighterApi | null = null): void {
     isSigning: false,
     error: null,
     errorCode: null,
+    retryCount: 0,
   });
 }
 
@@ -371,12 +374,37 @@ test('switchNetwork always releases the switching flag', async () => {
 });
 
 test('clearError resets the message and the category together', () => {
+  resetStore();
   useFreighterStore.setState({ error: 'Declined', errorCode: 'USER_DECLINED' });
 
   useFreighterStore.getState().clearError();
 
   assert.equal(useFreighterStore.getState().error, null);
   assert.equal(useFreighterStore.getState().errorCode, null);
+  assert.equal(useFreighterStore.getState().status, 'disconnected');
+  resetStore();
+});
+
+test('hydrate classifies a locked wallet', async () => {
+  resetStore(healthyApi({ getAddress: async () => ({ address: '' }) }));
+  markConnected();
+
+  await useFreighterStore.getState().hydrate();
+
+  assert.equal(useFreighterStore.getState().status, 'locked');
+  assert.equal(useFreighterStore.getState().errorCode, 'LOCKED');
+  resetStore();
+});
+
+test('recovery copy offers a distinct action per error code', () => {
+  assert.equal(getFreighterRecovery('NOT_INSTALLED').action, 'install');
+  assert.equal(getFreighterRecovery('USER_DECLINED').action, 'retry');
+  assert.equal(getFreighterRecovery('TIMEOUT').action, 'retry');
+  assert.equal(getFreighterRecovery('LOCKED').action, 'unlock_and_retry');
+  assert.equal(getFreighterRecovery(null).action, 'retry');
+  assert.equal(getFreighterRecovery('TIMEOUT', FREIGHTER_MAX_RETRIES).action, 'reload');
+  // Installing is never replaced by a reload suggestion.
+  assert.equal(getFreighterRecovery('NOT_INSTALLED', FREIGHTER_MAX_RETRIES).action, 'install');
 });
 
 /* -------------------------------------------------------------------------- */
