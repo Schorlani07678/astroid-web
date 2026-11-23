@@ -144,7 +144,7 @@ export function Topbar({ navOpen, onOpenNav }: TopbarProps) {
           type="button"
           onClick={onOpenNav}
           className={cn(
-            'grid h-9 w-9 place-items-center rounded-button text-foreground-secondary transition-colors duration-fast hover:bg-surface-secondary hover:text-foreground lg:hidden',
+            'grid h-9 w-9 place-items-center rounded-button text-foreground-secondary transition-colors duration-fast hover:bg-surface-secondary hover:text-foreground md:hidden',
             TOPBAR_FOCUS,
           )}
           aria-label="Open navigation menu"
