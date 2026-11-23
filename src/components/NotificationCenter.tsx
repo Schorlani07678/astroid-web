@@ -16,6 +16,7 @@ import {
   XCircle,
   AlertCircle,
 } from 'lucide-react';
+import { focusTrapStack } from '@/hooks/focusTrapStack';
 import { cn } from '@/lib/cn';
 import { useNotificationStore } from '@/stores/notification-store';
 import type { NotificationType, AppNotification } from '@/types/domain';
@@ -205,7 +206,11 @@ export function NotificationCenter() {
       }
     };
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      // A modal stacked above owns Escape; otherwise close and hand focus back
+      // to the bell so keyboard users are not dropped at the top of the page.
+      if (e.key !== 'Escape' || e.defaultPrevented || focusTrapStack.size() > 0) return;
+      setOpen(false);
+      triggerRef.current?.focus();
     };
 
     document.addEventListener('mousedown', handleClickOutside);

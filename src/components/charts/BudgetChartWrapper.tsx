@@ -3,6 +3,7 @@
 import type { ReactElement } from 'react';
 import { ResponsiveContainer } from 'recharts';
 
+import { RESPONSIVE_CHART_DEBOUNCE_MS } from '@/components/charts/responsive';
 import { cn } from '@/lib/cn';
 
 interface BudgetChartWrapperProps {
@@ -34,7 +35,8 @@ export function BudgetChartWrapper({
         width="100%"
         height="100%"
         minHeight={minHeight}
-        debounce={80}
+        minWidth={0}
+        debounce={RESPONSIVE_CHART_DEBOUNCE_MS}
       >
         {children}
       </ResponsiveContainer>

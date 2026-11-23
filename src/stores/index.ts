@@ -10,10 +10,17 @@ export {
   type DashboardCurrency,
 } from './preferences-store';
 export { useHydrated } from '@/hooks/use-hydrated';
-export { useFreighterStore, isValidStellarPublicKey } from './freighter-store';
+export {
+  useFreighterStore,
+  isValidStellarPublicKey,
+  classifyFreighterError,
+  FreighterError,
+  FREIGHTER_ERROR_TITLES,
+} from './freighter-store';
 export { useWalletStore } from '@/lib/useWalletStore';
 export type {
   FreighterConnectionStatus,
+  FreighterErrorCode,
   FreighterWalletState,
   StellarWalletNetwork,
   WalletActions,

@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { RESPONSIVE_CHART_DEBOUNCE_MS } from '@/components/charts/responsive';
 import { cn } from '@/lib/cn';
 import { ChartTooltipShell, type TooltipPayloadItem } from '@/components/charts';
 import { formatCurrency, formatDateTime } from '@/lib/format';
@@ -124,11 +125,16 @@ function BudgetSparkline({
 
   return (
     <div
-      className="h-8 w-full"
+      className="h-8 w-full min-w-0"
       role="img"
       aria-label={`${label} — 14-day spend velocity sparkline`}
     >
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer
+        width="100%"
+        height="100%"
+        minWidth={0}
+        debounce={RESPONSIVE_CHART_DEBOUNCE_MS}
+      >
         <AreaChart data={history} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id={`spark-${gradientId}`} x1="0" y1="0" x2="0" y2="1">

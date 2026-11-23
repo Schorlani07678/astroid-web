@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, ShieldCheck, Wallet } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
@@ -15,6 +15,8 @@ import type { LocalApprovalDecision } from '@/stores/proposal-approval-store';
 import { cn } from '@/lib/cn';
 import { formatCurrency, formatRelativeTime } from '@/lib/format';
 import type { Proposal } from '@/types/domain';
+
+import { ApprovalStatusLiveRegion } from './ApprovalStatusLiveRegion';
 
 export interface ProposalApprovalConfirmDialogProps {
   proposal: Proposal;
@@ -53,10 +55,25 @@ export function ProposalApprovalConfirmDialog({
 
   const [isSigning, setIsSigning] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
+  // Synchronous double-submit guard: `busy` comes from React state, so two
+  // clicks in the same tick would both observe `false` before the re-render.
+  const submitGuardRef = useRef(false);
+  // Safe default focus target for a destructive confirmation.
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
   const isApprove = action === 'approved';
   const isRequestChanges = action === 'changes_requested';
   const busy = isProcessing || isSigning;
+  // The risk note is the only target of the confirm button's aria-describedby.
+  // Never leave a dangling ID reference for lower-scored proposals.
+  const showRiskNote = proposal.riskScore >= 70;
+  const liveMessage = busy
+    ? isSigning
+      ? 'Waiting for wallet signature.'
+      : 'Recording your decision.'
+    : decision
+      ? `Your decision (${decision}) has been recorded.`
+      : `Reviewing ${isApprove ? 'approval' : 'rejection'} of proposal ${proposal.title}.`;
 
   // Reset transient signing state whenever the dialog is (re)opened.
   useEffect(() => {
@@ -67,44 +84,44 @@ export function ProposalApprovalConfirmDialog({
   }, [open, action]);
 
   const handleConfirm = async () => {
-    if (!action || busy) return;
+    if (!action || busy || submitGuardRef.current) return;
+    submitGuardRef.current = true;
     setSignError(null);
 
-    // Optional wallet signature round-trip before the decision is recorded.
-    if (isApprove && xdr) {
-      if (!isConnected) {
-        const message =
-          'Freighter wallet is not connected. Reconnect the extension and try again.';
-        setSignError(message);
-        toast.error(message);
-        return;
-      }
-      setIsSigning(true);
-      try {
-        const signedXdr = await signTransaction(xdr);
-        if (!signedXdr) {
-          // Hook already surfaced its own error; treat as a cancelled signing.
-          const message = 'Signing was cancelled or failed in the wallet.';
+    try {
+      // Optional wallet signature round-trip before the decision is recorded.
+      if (isApprove && xdr) {
+        if (!isConnected) {
+          const message =
+            'Freighter wallet is not connected. Reconnect the extension and try again.';
           setSignError(message);
           toast.error(message);
-          setIsSigning(false);
           return;
         }
-        toast.success('Transaction signed with Freighter');
-      } catch (error) {
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : 'Wallet signing failed. The decision was not recorded.';
-        setSignError(message);
-        toast.error(message);
-        setIsSigning(false);
-        return;
+        setIsSigning(true);
+        try {
+          const signedXdr = await signTransaction(xdr);
+          if (!signedXdr) {
+            // Hook already surfaced its own error; treat as a cancelled signing.
+            const message = 'Signing was cancelled or failed in the wallet.';
+            setSignError(message);
+            toast.error(message);
+            return;
+          }
+          toast.success('Transaction signed with Freighter');
+        } catch (error) {
+          const message =
+            error instanceof Error && error.message
+              ? error.message
+              : 'Wallet signing failed. The decision was not recorded.';
+          setSignError(message);
+          toast.error(message);
+          return;
+        } finally {
+          setIsSigning(false);
+        }
       }
-      setIsSigning(false);
-    }
 
-    try {
       let succeeded = false;
       if (isApprove) {
         succeeded = await approve();
@@ -116,6 +133,8 @@ export function ProposalApprovalConfirmDialog({
       if (succeeded) onClose();
     } catch {
       // Decision failures already toast inside the approval hook.
+    } finally {
+      submitGuardRef.current = false;
     }
   };
 
@@ -146,9 +165,11 @@ export function ProposalApprovalConfirmDialog({
       }
       size="md"
       className={className}
+      initialFocusRef={cancelButtonRef}
       footer={
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
           <Button
+            ref={cancelButtonRef}
             type="button"
             variant="outline"
             onClick={handleCancel}
@@ -175,7 +196,7 @@ export function ProposalApprovalConfirmDialog({
                   ? `Request changes to ${proposal.title}`
                   : `Confirm rejection of ${proposal.title}`
             }
-            aria-describedby="proposal-confirm-risk-note"
+            aria-describedby={showRiskNote ? 'proposal-confirm-risk-note' : undefined}
           >
             {isApprove
               ? 'Confirm approval'
@@ -186,15 +207,9 @@ export function ProposalApprovalConfirmDialog({
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-4" aria-busy={busy}>
         {/* Screen reader context ------------------------------------------- */}
-        <p role="status" aria-live="polite" className="sr-only">
-          {busy
-            ? isSigning
-              ? 'Waiting for wallet signature.'
-              : 'Recording your decision.'
-            : `Reviewing ${isApprove ? 'approval' : 'rejection'} of proposal ${proposal.title}.`}
-        </p>
+        <ApprovalStatusLiveRegion message={liveMessage} />
 
         {/* Proposal summary ------------------------------------------------- */}
         <div className="flex items-center justify-between rounded-card border border-border bg-surface-secondary/40 px-4 py-3">
@@ -272,7 +287,7 @@ export function ProposalApprovalConfirmDialog({
           </div>
         )}
 
-        {proposal.riskScore >= 70 && (
+        {showRiskNote && (
           <p
             id="proposal-confirm-risk-note"
             className={cn(
@@ -294,7 +309,7 @@ export function ProposalApprovalConfirmDialog({
           </p>
         )}
         {decision && (
-          <p role="status" className="text-xs font-medium text-success">
+          <p className="text-xs font-medium text-success">
             Your decision ({decision}) has been recorded.
           </p>
         )}

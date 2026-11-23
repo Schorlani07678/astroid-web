@@ -17,6 +17,15 @@ import { ReceiptText } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { CATEGORICAL, ChartTooltipShell } from '@/components/charts';
+import {
+  chartLegendMetrics,
+  chartMarginsFor,
+  chartTickFontSize,
+  chartYAxisWidth,
+  isCompactChartWidth,
+  responsiveContainerProps,
+} from '@/components/charts/responsive';
+import { useChartWidth } from '@/components/charts/use-chart-width';
 import { formatCurrency } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { ExpenseSeriesPoint } from './utils/expenseBreakdown';
@@ -99,35 +108,49 @@ export function ExpenseBreakdownChart({
   bare = false,
 }: ExpenseBreakdownChartProps) {
   const mounted = useMounted();
+  const { ref: chartRef, width: chartWidth } = useChartWidth<HTMLDivElement>();
+  const compact = isCompactChartWidth(chartWidth);
+  const legend = chartLegendMetrics(chartWidth);
 
   const hasData = useMemo(() => series.some((point) => point.spent > 0), [series]);
 
   const chart = (
-    <div className="h-72 w-full" role="img" aria-label={`Expense breakdown for ${subjectName}`}>
+    <div
+      ref={chartRef}
+      className="h-72 w-full min-w-0"
+      role="img"
+      aria-label={`Expense breakdown for ${subjectName}`}
+    >
       {!mounted ? (
         <div className="skeleton h-full w-full rounded-md" />
       ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+        <ResponsiveContainer {...responsiveContainerProps()}>
+          <ComposedChart data={series} margin={chartMarginsFor(chartWidth)}>
             <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="bucketLabel"
               tickLine={false}
               axisLine={{ stroke: AXIS }}
-              tick={{ fill: TEXT, fontSize: 11 }}
+              tick={{ fill: TEXT, fontSize: chartTickFontSize(chartWidth) }}
               // Thin ticks on narrow datasets so long labels never clip.
               interval="preserveStartEnd"
-              minTickGap={24}
+              minTickGap={compact ? 12 : 24}
             />
             <YAxis
               tickLine={false}
               axisLine={false}
-              width={64}
-              tick={{ fill: TEXT, fontSize: 11 }}
+              width={chartYAxisWidth(chartWidth, 64)}
+              tick={{ fill: TEXT, fontSize: chartTickFontSize(chartWidth) }}
               tickFormatter={(value: number) => formatCurrency(value, asset, { compact: true })}
             />
             <RechartsTooltip content={<SeriesTooltip asset={asset} />} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Legend
+              iconSize={legend.iconSize}
+              wrapperStyle={{
+                fontSize: legend.fontSize,
+                paddingTop: legend.paddingTop,
+              }}
+            />
             <Bar
               dataKey="spent"
               name="Spend"

@@ -11,6 +11,15 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import {
+  chartLegendMetrics,
+  chartMarginsFor,
+  chartTickFontSize,
+  isCompactChartWidth,
+  responsiveContainerProps,
+  shortenAxisLabel,
+} from '@/components/charts/responsive';
+import { useChartWidth } from '@/components/charts/use-chart-width';
 import { CHART_COLORS, CHART_TOKENS } from '@/components/charts/theme';
 import type { Budget } from '@/types/domain';
 import {
@@ -77,6 +86,9 @@ export function DepartmentBudgetChart({
   height = 280,
 }: DepartmentBudgetChartProps) {
   const data = useMemo(() => buildDepartmentBudgetBreakdown(budgets), [budgets]);
+  const { ref: chartRef, width: chartWidth } = useChartWidth<HTMLDivElement>();
+  const compact = isCompactChartWidth(chartWidth);
+  const legend = chartLegendMetrics(chartWidth);
 
   if (data.length === 0) {
     return (
@@ -88,21 +100,37 @@ export function DepartmentBudgetChart({
 
   return (
     <div
+      ref={chartRef}
       className="w-full min-w-0 rounded-card border border-border bg-surface p-4"
       style={{ height }}
     >
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+      <ResponsiveContainer {...responsiveContainerProps()}>
+        <BarChart
+          data={data}
+          margin={chartMarginsFor(chartWidth, { top: 12, right: 16, left: 0, bottom: 8 })}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
           <XAxis
             dataKey="department"
             stroke={CHART_COLORS.axis}
-            fontSize={12}
+            fontSize={chartTickFontSize(chartWidth)}
+            tickLine={false}
+            tickFormatter={(value: string) => shortenAxisLabel(value, compact ? 10 : 16)}
+            interval={compact ? 0 : 'preserveStartEnd'}
+          />
+          <YAxis
+            stroke={CHART_COLORS.axis}
+            fontSize={chartTickFontSize(chartWidth)}
             tickLine={false}
           />
-          <YAxis stroke={CHART_COLORS.axis} fontSize={12} tickLine={false} />
           <Tooltip content={<DepartmentBudgetTooltip />} />
-          <Legend />
+          <Legend
+            iconSize={legend.iconSize}
+            wrapperStyle={{
+              fontSize: `${legend.fontSize}px`,
+              paddingTop: `${legend.paddingTop}px`,
+            }}
+          />
           <Bar
             dataKey="allocated"
             name="Allocated"

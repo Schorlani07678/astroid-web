@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   Check,
   CheckCircle2,
   Clock,
+  FlaskConical,
   ShieldAlert,
   X,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ import { formatCurrency, formatDateTime, formatRelativeTime } from '@/lib/format
 import { proposalStatus } from '@/lib/status';
 import type { Proposal } from '@/types/domain';
 
+import { ProposalSimulationModal } from './components/ProposalSimulationModal';
 import {
   approvalQueryKeys,
   fetchProposalApprovalState,
@@ -38,6 +40,7 @@ import {
   type ProposalApprovalSnapshot,
   type ReviewDecision,
 } from './approvalState';
+import { ApprovalStatusLiveRegion } from './components/ApprovalStatusLiveRegion';
 
 export interface ProposalReviewCardProps {
   proposal: Proposal;
@@ -100,6 +103,10 @@ export function ProposalReviewCard({
   const [confirmAction, setConfirmAction] = useState<ReviewDecision | null>(null);
   const [isSigning, setIsSigning] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [simulationOpen, setSimulationOpen] = useState(false);
+  const [pendingDecision, setPendingDecision] = useState<ReviewDecision | null>(null);
+  // Destructive confirmations place focus on Cancel, never on the confirm action.
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
   const snapshotQuery = useQuery({
     queryKey: approvalQueryKeys.proposal(proposal.id),
@@ -163,12 +170,18 @@ export function ProposalReviewCard({
     setActionError(null);
   };
 
-  const handleConfirm = async () => {
-    if (!confirmAction || busy) return;
+  /**
+   * Signs (when an envelope is attached) and records a decision. Shared by the
+   * confirmation dialog and the simulation preview modal so both paths hit the
+   * same workflow API. Resolves `true` once the decision is recorded.
+   */
+  const performDecision = async (decision: ReviewDecision): Promise<boolean> => {
+    if (busy || pendingDecision) return false;
     setActionError(null);
+    setPendingDecision(decision);
 
     try {
-      if (confirmAction === 'approved' && xdr) {
+      if (decision === 'approved' && xdr) {
         if (!isConnected) {
           throw new Error(
             'Freighter wallet is not connected. Reconnect the extension and try again.',
@@ -181,14 +194,14 @@ export function ProposalReviewCard({
         }
       }
 
-      const next = await mutation.mutateAsync(confirmAction);
-      toast.success(DECISION_COPY[confirmAction].success, {
+      const next = await mutation.mutateAsync(decision);
+      toast.success(DECISION_COPY[decision].success, {
         description:
-          confirmAction === 'approved'
+          decision === 'approved'
             ? `${approvalProgress(next).approved} of ${next.requiredApprovals} approvals collected.`
             : 'The rejection has been added to the audit trail.',
       });
-      setConfirmAction(null);
+      return true;
     } catch (error) {
       const message =
         error instanceof Error && error.message
@@ -196,9 +209,22 @@ export function ProposalReviewCard({
           : 'The decision could not be recorded. Please try again.';
       setActionError(message);
       toast.error(message);
+      return false;
     } finally {
       setIsSigning(false);
+      setPendingDecision(null);
     }
+  };
+
+  const handleConfirm = async () => {
+    if (!confirmAction || busy) return;
+    const recorded = await performDecision(confirmAction);
+    if (recorded) setConfirmAction(null);
+  };
+
+  const openSimulation = () => {
+    setActionError(null);
+    setSimulationOpen(true);
   };
 
   const disabledReason = !authorized
@@ -209,8 +235,24 @@ export function ProposalReviewCard({
         ? `You already ${myDecision} this proposal.`
         : undefined;
 
+  // These regions live on the card, not inside the dialog: they are mounted
+  // before the decision arrives and keep announcing after the dialog closes.
+  const decisionAnnouncement = hasDecided
+    ? `Your ${myDecision} decision is recorded for ${proposal.title}. ${progress.approved} of ${progress.required} approvals collected.`
+    : '';
+  const dialogAnnouncement = isSigning
+    ? 'Waiting for wallet signature.'
+    : mutation.isPending
+      ? 'Submitting your decision.'
+      : `Reviewing ${confirmAction ?? 'proposal'} decision for ${proposal.title}.`;
+
   return (
     <Card className={cn('overflow-hidden', className)}>
+      <ApprovalStatusLiveRegion message={decisionAnnouncement} />
+      <ApprovalStatusLiveRegion
+        message={actionError ? `Decision failed: ${actionError}` : ''}
+        assertive
+      />
       <CardContent className="pt-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-2">
@@ -332,6 +374,7 @@ export function ProposalReviewCard({
       <CardFooter className="flex-wrap justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Button
+            type="button"
             variant="gold"
             size="sm"
             leftIcon={<Check className="h-4 w-4" aria-hidden />}
@@ -347,6 +390,7 @@ export function ProposalReviewCard({
             Approve
           </Button>
           <Button
+            type="button"
             variant="outline"
             size="sm"
             leftIcon={<X className="h-4 w-4" aria-hidden />}
@@ -362,10 +406,37 @@ export function ProposalReviewCard({
             Reject
           </Button>
         </div>
-        {disabledReason && (
-          <p className="text-2xs text-foreground-muted">{disabledReason}</p>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {disabledReason && (
+            <p className="text-2xs text-foreground-muted">{disabledReason}</p>
+          )}
+          {isPending && (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<FlaskConical className="h-4 w-4" aria-hidden />}
+              onClick={openSimulation}
+              aria-haspopup="dialog"
+            >
+              Preview simulation
+            </Button>
+          )}
+        </div>
       </CardFooter>
+
+      <ProposalSimulationModal
+        proposal={proposal}
+        open={simulationOpen}
+        onClose={() => {
+          setSimulationOpen(false);
+          setActionError(null);
+        }}
+        onDecide={performDecision}
+        canAct={canAct || pendingDecision !== null}
+        disabledReason={disabledReason}
+        pendingDecision={pendingDecision}
+        error={simulationOpen ? actionError : null}
+      />
 
       <Dialog
         open={confirmAction !== null}
@@ -373,9 +444,11 @@ export function ProposalReviewCard({
         title={dialogCopy?.title}
         description={dialogCopy?.description}
         size="md"
+        initialFocusRef={cancelButtonRef}
         footer={
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
+              ref={cancelButtonRef}
               type="button"
               variant="outline"
               onClick={closeConfirmation}
@@ -395,13 +468,7 @@ export function ProposalReviewCard({
         }
       >
         <div className="space-y-4">
-          <p role="status" aria-live="polite" className="sr-only">
-            {isSigning
-              ? 'Waiting for wallet signature.'
-              : mutation.isPending
-                ? 'Submitting your decision.'
-                : `Reviewing ${confirmAction ?? 'proposal'} decision for ${proposal.title}.`}
-          </p>
+          <ApprovalStatusLiveRegion message={dialogAnnouncement} />
 
           <dl className="grid gap-x-4 gap-y-3 rounded-card border border-border bg-surface-secondary/40 p-4 text-xs sm:grid-cols-2">
             <div className="min-w-0">
@@ -466,7 +533,7 @@ export function ProposalReviewCard({
           )}
 
           {actionError && (
-            <p role="alert" className="text-xs font-medium text-danger">
+            <p className="text-xs font-medium text-danger">
               {actionError}
             </p>
           )}

@@ -46,6 +46,23 @@ const config: Config = {
       'space-120': '120px',
     },
     extend: {
+      // Chart and skeleton boxes need heights above the small spacing steps.
+      // `spacing` stops at 120px, so Recharts parents that use `h-72`/`h-96`
+      // were collapsing to height 0; these follow the same 8px grid.
+      height: {
+        64: '256px',
+        72: '288px',
+        80: '320px',
+        96: '384px',
+      },
+      minHeight: {
+        64: '256px',
+      },
+      maxHeight: {
+        64: '256px',
+        72: '288px',
+        96: '384px',
+      },
       colors: {
         background: {
           DEFAULT: 'rgb(var(--background-primary) / <alpha-value>)',

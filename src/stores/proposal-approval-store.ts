@@ -16,6 +16,16 @@ interface ProposalApprovalState {
   entries: Record<string, ProposalApprovalEntry>;
 
   getEntry: (proposalId: string) => ProposalApprovalEntry;
+  /**
+   * Atomically claims the in-flight slot for a proposal.
+   *
+   * Returns `false` when a decision is already being recorded, or one has
+   * already been recorded, so the state machine itself guarantees a single
+   * submission. A render-derived `isProcessing` flag cannot do that: two
+   * clicks landing in the same tick both read the previous render's value.
+   */
+  tryBeginDecision: (proposalId: string) => boolean;
+  /** Convenience wrapper around {@link tryBeginDecision} (result ignored). */
   beginDecision: (proposalId: string) => void;
   resolveDecision: (proposalId: string, decision: LocalApprovalDecision) => void;
   failDecision: (proposalId: string, error: string) => void;
@@ -33,17 +43,22 @@ export const useProposalApprovalStore = create<ProposalApprovalState>((set, get)
 
   getEntry: (proposalId) => get().entries[proposalId] ?? emptyEntry,
 
-  beginDecision: (proposalId) =>
+  tryBeginDecision: (proposalId) => {
+    const current = get().entries[proposalId] ?? emptyEntry;
+    if (current.isProcessing || current.decision !== null) return false;
+
     set((state) => ({
       entries: {
         ...state.entries,
-        [proposalId]: {
-          ...(state.entries[proposalId] ?? emptyEntry),
-          isProcessing: true,
-          error: null,
-        },
+        [proposalId]: { ...current, isProcessing: true, error: null },
       },
-    })),
+    }));
+    return true;
+  },
+
+  beginDecision: (proposalId) => {
+    get().tryBeginDecision(proposalId);
+  },
 
   resolveDecision: (proposalId, decision) =>
     set((state) => ({

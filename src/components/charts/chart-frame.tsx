@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ResponsiveContainer } from 'recharts';
+import { RESPONSIVE_CHART_DEBOUNCE_MS } from '@/components/charts/responsive';
 import { ChartIllustration } from '@/components/illustrations';
 import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/lib/cn';
@@ -11,7 +12,7 @@ import { cn } from '@/lib/cn';
  * resize to settle keeps the chart from redrawing (and jittering) on each
  * pixel of a window drag or a sidebar animation.
  */
-export const RESIZE_DEBOUNCE_MS = 120;
+export const RESIZE_DEBOUNCE_MS = RESPONSIVE_CHART_DEBOUNCE_MS;
 
 /** True after the first client render. Charts measure the DOM, so they skip server rendering. */
 export function useMounted(): boolean {

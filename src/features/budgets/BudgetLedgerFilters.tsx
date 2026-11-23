@@ -14,7 +14,7 @@ import {
   BUDGET_LEDGER_STATUS_LABELS,
   type BudgetLedgerFilterState,
   type BudgetLedgerStatusFilter,
-} from './budgetLedgerFilters';
+} from './budgetLedgerFiltering';
 
 export interface BudgetAgentOption {
   agentId: string;
