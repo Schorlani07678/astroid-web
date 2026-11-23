@@ -1,133 +1,131 @@
+import {
+  buildExportFilename,
+  downloadLogExport,
+  escapeCsvCell,
+  planLogExport,
+  serializeLogCsv,
+  serializeLogJson,
+  type ExportColumn,
+  type ExportFormat,
+  type LogExportPayload,
+  type LogExportPlan,
+} from '@/lib/exportSerialization';
 import type { AuditEvent } from './types';
 
 /**
- * Client-side audit-log export helpers.
+ * Agent-activity audit-log export (closes part of #562).
  *
  * Everything here runs in the browser against the currently visible table
  * data (respecting active filters), so compliance officers can export exactly
- * what they are looking at. CSV generation follows RFC 4180 escaping and JSON
- * output is pretty-printed with an `exportedAt` envelope.
+ * what they are looking at. Serialization is delegated to the shared
+ * `@/lib/exportSerialization` helpers: RFC 4180 escaping with spreadsheet
+ * formula-injection neutralisation, UTF-8 MIME types, timestamped filenames,
+ * and chunked generation so large audit trails never block the UI thread.
  */
 
-export type AuditExportFormat = 'csv' | 'json';
+export type AuditExportFormat = ExportFormat;
 
-export interface AuditExportPayload {
-  filename: string;
-  mimeType: string;
-  content: string;
-}
+/** Payload shape shared with the financial audit export. */
+export type AuditExportPayload = LogExportPayload;
 
 /** Column order for the CSV export; mirrors the audit table at full fidelity. */
-const CSV_HEADERS = [
-  'Event ID',
-  'Timestamp',
-  'Level',
-  'Event Type',
-  'Actor ID',
-  'Actor Name',
-  'Actor Type',
-  'Project',
-  'Amount',
-  'Asset',
-  'Summary',
-  'Details',
-  'XDR Hash',
-  'Raw Payload',
-] as const;
+export const AUDIT_CSV_COLUMNS: readonly ExportColumn<AuditEvent>[] = [
+  { header: 'Event ID', value: (event) => event.id },
+  { header: 'Timestamp', value: (event) => event.timestamp },
+  { header: 'Level', value: (event) => event.level },
+  { header: 'Event Type', value: (event) => event.eventType },
+  { header: 'Actor ID', value: (event) => event.actorId },
+  { header: 'Actor Name', value: (event) => event.actorName },
+  { header: 'Actor Type', value: (event) => event.actorType },
+  { header: 'Project', value: (event) => event.project ?? '' },
+  { header: 'Amount', value: (event) => event.amount ?? '' },
+  { header: 'Asset', value: (event) => event.asset ?? '' },
+  { header: 'Summary', value: (event) => event.summary },
+  { header: 'Details', value: (event) => event.details },
+  { header: 'XDR Hash', value: (event) => event.xdrHash ?? '' },
+  { header: 'Raw Payload', value: (event) => event.rawPayload },
+];
 
-/**
- * Escape a single CSV field per RFC 4180: values containing commas, quotes, or
- * line breaks are wrapped in double quotes and embedded quotes are doubled.
- */
+const SCOPE = 'audit-log';
+const SOURCE = 'agent-activity-audit-log';
+
+/** Escape a single CSV field (RFC 4180 + formula-injection guard). */
 export function escapeCsvField(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  const text = typeof value === 'string' ? value : JSON.stringify(value) ?? String(value);
-  if (text.length === 0) return '';
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  return escapeCsvCell(value);
 }
 
 /** Build the full CSV document (header row + one line per event). */
 export function buildAuditCsv(events: readonly AuditEvent[]): string {
-  const rows = events.map((event) =>
-    [
-      event.id,
-      event.timestamp,
-      event.level,
-      event.eventType,
-      event.actorId,
-      event.actorName,
-      event.actorType,
-      event.project ?? '',
-      event.amount ?? '',
-      event.asset ?? '',
-      event.summary,
-      event.details,
-      event.xdrHash ?? '',
-      event.rawPayload,
-    ]
-      .map(escapeCsvField)
-      .join(','),
-  );
-  return [CSV_HEADERS.map(escapeCsvField).join(','), ...rows].join('\r\n');
+  return serializeLogCsv(events, AUDIT_CSV_COLUMNS);
 }
 
-/** Build the pretty-printed JSON document with export metadata. */
-export function buildAuditJson(events: readonly AuditEvent[], exportedAt: Date = new Date()): string {
-  return JSON.stringify(
-    {
-      exportedAt: exportedAt.toISOString(),
-      count: events.length,
-      events,
-    },
-    null,
-    2,
-  );
+/** Build the self-describing JSON document with export metadata. */
+export function buildAuditJson(
+  events: readonly AuditEvent[],
+  exportedAt: Date = new Date(),
+): string {
+  return serializeLogJson(events, {
+    exportedAt,
+    recordsKey: 'events',
+    metadata: { source: SOURCE },
+  });
 }
 
 /**
  * Descriptive, filesystem-safe filename stamped with the export time, e.g.
- * `astroid-audit-log-2026-10-19T12-34-56-789Z.csv`.
+ * `astroid-audit-log-2026-11-22T13-30-45-123Z.csv`.
  */
 export function buildAuditExportFilename(
   format: AuditExportFormat,
   date: Date = new Date(),
 ): string {
-  const stamp = date.toISOString().replace(/[:.]/g, '-');
-  return `astroid-audit-log-${stamp}.${format}`;
+  return buildExportFilename(SCOPE, format, date);
 }
 
-/** Assemble a complete export payload (filename, mime type, serialized body). */
+/**
+ * Build a lazily streamed plan for the audit log; consumed by the async
+ * downloader so large exports yield to the event loop between batches.
+ */
+export function planAuditExport(
+  events: readonly AuditEvent[],
+  format: AuditExportFormat,
+  date: Date = new Date(),
+): LogExportPlan {
+  return format === 'csv'
+    ? planLogExport({
+        scope: SCOPE,
+        format: 'csv',
+        rows: events,
+        columns: AUDIT_CSV_COLUMNS,
+        exportedAt: date,
+      })
+    : planLogExport({
+        scope: SCOPE,
+        format: 'json',
+        rows: events,
+        recordsKey: 'events',
+        metadata: { source: SOURCE },
+        exportedAt: date,
+      });
+}
+
+/** Assemble a complete export payload (filename, MIME type, chunked body). */
 export function buildAuditExport(
   events: readonly AuditEvent[],
   format: AuditExportFormat,
   date: Date = new Date(),
 ): AuditExportPayload {
-  return format === 'csv'
-    ? {
-        filename: buildAuditExportFilename('csv', date),
-        mimeType: 'text/csv;charset=utf-8;',
-        content: buildAuditCsv(events),
-      }
-    : {
-        filename: buildAuditExportFilename('json', date),
-        mimeType: 'application/json;charset=utf-8;',
-        content: buildAuditJson(events, date),
-      };
+  const plan = planAuditExport(events, format, date);
+  return {
+    filename: plan.filename,
+    mimeType: plan.mimeType,
+    chunks: Array.from(plan.stream()),
+  };
 }
 
 /** Trigger a browser file download for an export payload (client-side only). */
 export function downloadAuditExport(payload: AuditExportPayload): void {
-  if (typeof window === 'undefined') return;
-  const blob = new Blob([payload.content], { type: payload.mimeType });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = payload.filename;
-  anchor.rel = 'noopener';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  downloadLogExport(payload);
 }
 
 /** Convenience: build and download the audit log in one call. */

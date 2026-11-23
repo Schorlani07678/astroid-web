@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/input';
 import {
+  PROVIDER_API_KEY_RULES,
   agentProviderConfigSchema,
   agentProviderTypes,
   isHostedProvider,
@@ -193,7 +194,9 @@ export function AgentProviderConfigForm({
               hint={
                 isCustom
                   ? 'Optional — only if your custom endpoint requires bearer auth.'
-                  : undefined
+                  : PROVIDER_API_KEY_RULES[provider]
+                    ? `Expected format: ${PROVIDER_API_KEY_RULES[provider]?.example}`
+                    : undefined
               }
             >
               <Input
@@ -206,7 +209,7 @@ export function AgentProviderConfigForm({
                   isCustom ? 'Optional bearer token' : 'Paste provider API key'
                 }
                 invalid={Boolean(form.formState.errors.apiKey)}
-                aria-describedby={describedBy('provider-config-api-key', 'apiKey')}
+                aria-describedby={describedBy('provider-config-api-key', 'apiKey', true)}
               />
             </FormRow>
           ) : null}

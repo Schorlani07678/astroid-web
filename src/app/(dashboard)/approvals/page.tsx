@@ -11,6 +11,7 @@ import { ApprovalQueue } from '@/features/approvals/ApprovalQueue';
 import { MultisigProgressCard } from '@/features/approvals/components/MultisigProgressCard';
 import { mockMultisigRequest } from '@/features/approvals/fixtures/multisig';
 import { PageTransition } from '@/components/ui/motion';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function ApprovalsPage() {
   const proposals = useProposals();
@@ -41,7 +42,11 @@ export default function ApprovalsPage() {
           />
         }
       >
-        {(data) => <ApprovalQueue proposals={data} />}
+        {(data) => (
+          <ErrorBoundary section="Approval queue">
+            <ApprovalQueue proposals={data} />
+          </ErrorBoundary>
+        )}
       </QueryBoundary>
 
       <section className="space-y-4">
@@ -52,7 +57,9 @@ export default function ApprovalsPage() {
             weight, remaining signatures, and each approver&apos;s decision.
           </p>
         </div>
-        <MultisigProgressCard request={mockMultisigRequest} />
+        <ErrorBoundary section="Signing progress">
+          <MultisigProgressCard request={mockMultisigRequest} />
+        </ErrorBoundary>
       </section>
     </PageTransition>
   );

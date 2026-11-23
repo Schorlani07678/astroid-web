@@ -88,7 +88,7 @@ export const ProposalQueue: React.FC<ProposalQueueProps> = ({ proposals }) => {
               id="status-filter"
               value={(table.getColumn('status')?.getFilterValue() as string) ?? ''}
               onChange={e => table.getColumn('status')?.setFilterValue(e.target.value || undefined)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
             >
               <option value="">All Statuses</option>
               <option value="PENDING">Pending</option>
@@ -103,7 +103,7 @@ export const ProposalQueue: React.FC<ProposalQueueProps> = ({ proposals }) => {
               id="risk-tier-filter"
               value={(table.getColumn('riskTier')?.getFilterValue() as string) ?? ''}
               onChange={e => table.getColumn('riskTier')?.setFilterValue(e.target.value || undefined)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
             >
               <option value="">All Risk Tiers</option>
               <option value="LOW">Low</option>
@@ -121,7 +121,7 @@ export const ProposalQueue: React.FC<ProposalQueueProps> = ({ proposals }) => {
               placeholder="Filter agent..."
               value={(table.getColumn('agentSource')?.getFilterValue() as string) ?? ''}
               onChange={e => table.getColumn('agentSource')?.setFilterValue(e.target.value || undefined)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
             />
           </div>
         </div>
@@ -129,29 +129,39 @@ export const ProposalQueue: React.FC<ProposalQueueProps> = ({ proposals }) => {
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 shadow">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <caption className="sr-only">Proposals by ID, agent, risk, status and amount</caption>
           <thead className="bg-gray-50 dark:bg-gray-900">
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
-                {headerGroup.headers.map(header => (
-                  <th
-                    key={header.id}
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none"
-                    onClick={header.column.getToggleSortingHandler()}
-                  >
-                    <div className="flex items-center space-x-1">
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                      <span>
-                        {{
-                          asc: ' ▲',
-                          desc: ' ▼',
-                        }[header.column.getIsSorted() as string] ?? null}
-                      </span>
-                    </div>
-                  </th>
-                ))}
+                {headerGroup.headers.map(header => {
+                  const sorted = header.column.getIsSorted();
+                  const ariaSort =
+                    sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none';
+                  return (
+                    <th
+                      key={header.id}
+                      scope="col"
+                      aria-sort={ariaSort}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider select-none"
+                    >
+                      <button
+                        type="button"
+                        onClick={header.column.getToggleSortingHandler()}
+                        className="flex w-full items-center space-x-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      >
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                        <span aria-hidden="true">
+                          {{
+                            asc: ' ▲',
+                            desc: ' ▼',
+                          }[sorted as string] ?? null}
+                        </span>
+                      </button>
+                    </th>
+                  );
+                })}
               </tr>
             ))}
           </thead>
@@ -183,16 +193,18 @@ export const ProposalQueue: React.FC<ProposalQueueProps> = ({ proposals }) => {
         </div>
         <div className="space-x-2">
           <button
+            type="button"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
+            className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
           >
             Previous
           </button>
           <button
+            type="button"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
+            className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
           >
             Next
           </button>

@@ -42,7 +42,7 @@ import {
   applyBudgetLedgerFilters,
   isBudgetLedgerFilterActive,
   type BudgetLedgerFilterState,
-} from './budgetLedgerFilters';
+} from './budgetLedgerFiltering';
 import { exportBudgetLedgerCsv } from './budgetLedgerCsv';
 import { BudgetLedgerFilters, type BudgetAgentOption } from './BudgetLedgerFilters';
 import type { DepartmentBudget, AgentAllocation } from './types';
