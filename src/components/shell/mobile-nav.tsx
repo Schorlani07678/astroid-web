@@ -7,6 +7,7 @@ import { PanelLeftClose, PanelLeftOpen, X, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { navSections } from '@/lib/nav';
+import { SIDEBAR_DESKTOP_QUERY } from '@/lib/nav-breakpoint';
 import { cn } from '@/lib/cn';
 import { usePreferencesStore } from '@/stores/preferences-store';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -20,8 +21,8 @@ interface MobileNavProps {
 const DRAWER_FOCUS =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
-/** Matches the `lg` breakpoint, above which the drawer is replaced by the dock. */
-const DESKTOP_QUERY = '(min-width: 1024px)';
+/** Matches the `md` breakpoint, from which the pinned sidebar replaces the drawer. */
+const DESKTOP_QUERY = SIDEBAR_DESKTOP_QUERY;
 
 /**
  * Slide-in navigation for narrow viewports (mirrors the desktop command dock).
@@ -81,7 +82,7 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
   return (
     <AnimatePresence>
       {open && (
-        <div className="lg:hidden">
+        <div className="md:hidden">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

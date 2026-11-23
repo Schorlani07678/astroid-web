@@ -16,6 +16,11 @@ export interface DialogProps {
   footer?: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  /**
+   * Element that receives focus when the dialog opens. Defaults to the panel
+   * itself; pass a ref to a safe control (e.g. Cancel) for destructive flows.
+   */
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 const sizeClass = {
@@ -51,6 +56,7 @@ export function Dialog({
   footer,
   size = 'md',
   className,
+  initialFocusRef,
 }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -69,6 +75,7 @@ export function Dialog({
     active: open && mounted,
     containerRef: panelRef,
     onEscape: onClose,
+    initialFocusRef,
   });
 
   // `isClient` guards the SSR pass; `mounted` must already be true when `open`
@@ -91,7 +98,7 @@ export function Dialog({
         aria-label={title ? undefined : 'Dialog'}
         tabIndex={-1}
         className={cn(
-          'relative z-10 w-full animate-fade-up rounded-dialog border border-border bg-surface shadow-soft-3 focus:outline-none',
+          'relative z-10 w-full animate-fade-up rounded-dialog border border-border bg-surface shadow-soft-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
           sizeClass[size],
           className,
         )}

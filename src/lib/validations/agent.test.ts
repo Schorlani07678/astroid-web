@@ -118,7 +118,7 @@ test('templateWizardSchema accepts a valid template and shares the provider rule
   assert.equal(messages(result).provider, 'Select a supported provider.');
 });
 
-const validSettings = { name: 'Primary', provider: 'openai', model: 'gpt-4o', temperature: 0.7, apiKey: 'sk-abc' } as const;
+const validSettings = { name: 'Primary', provider: 'openai', model: 'gpt-4o', temperature: 0.7, apiKey: `sk-proj-${'a'.repeat(40)}` } as const;
 
 test('agentProviderConfigSchema accepts a hosted provider with a key and a catalog model', () => {
   assert.equal(agentProviderConfigSchema.safeParse(validSettings).success, true);

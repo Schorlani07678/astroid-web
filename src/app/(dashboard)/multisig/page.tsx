@@ -3,6 +3,7 @@
 import { PageHeader } from '@/components/dashboard/page-header';
 import { SectionLabel } from '@/components/dashboard/stat-card';
 import { PageTransition } from '@/components/ui/motion';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SignerManagement } from '@/features/multisig';
 import { MultisigProgressCard } from '@/features/approvals/components/MultisigProgressCard';
 import { mockMultisigRequest } from '@/features/approvals/fixtures/multisig';
@@ -15,7 +16,9 @@ export default function MultisigPage() {
         title="Multi-Sig Signers"
         description="View, add and remove co-signers, tune the master key thresholds and propose the whole change set to your organization's multi-signature Stellar account."
       />
-      <SignerManagement />
+      <ErrorBoundary section="Signer management">
+        <SignerManagement />
+      </ErrorBoundary>
 
       <section className="space-y-4">
         <div className="space-y-1.5">
@@ -25,7 +28,9 @@ export default function MultisigPage() {
             request, with each co-signer&apos;s decision.
           </p>
         </div>
-        <MultisigProgressCard request={mockMultisigRequest} />
+        <ErrorBoundary section="Signing progress">
+          <MultisigProgressCard request={mockMultisigRequest} />
+        </ErrorBoundary>
       </section>
     </PageTransition>
   );

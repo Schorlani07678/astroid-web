@@ -12,7 +12,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { RESPONSIVE_CHART_DEBOUNCE_MS } from '@/components/charts/responsive';
+import { useChartWidth } from '@/components/charts/use-chart-width';
 import { cn } from '@/lib/cn';
+import { meterDensityFor, meterPercentLabel } from './meterLayout';
 import { ChartTooltipShell, type TooltipPayloadItem } from '@/components/charts';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 
@@ -199,6 +201,8 @@ function Gauge({
   const resolvedCurrency = currency ?? 'USDC';
   const [mounted, setMounted] = useState(false);
   const reduceMotion = useReducedMotion();
+  const { ref: meterRef, width: meterWidth } = useChartWidth<HTMLDivElement>();
+  const density = meterDensityFor(meterWidth);
 
   useEffect(() => setMounted(true), []);
 
@@ -213,10 +217,11 @@ function Gauge({
     return total / series.length;
   }, [series]);
 
-  // Side-by-side while the grid is a single column; stacked once three
-  // meters share a row (lg) so the details keep their full width.
+  // Side-by-side while the card has room for it; below 360px the gauge moves
+  // above the details so the label, badge and amounts never squeeze each other.
   return (
     <div
+      ref={meterRef}
       className="rounded-card border border-border bg-surface-secondary/40 p-4"
       onClick={onDrillDown ? () => onDrillDown({ label, allocated, spent, currency, history }) : undefined}
       role={onDrillDown ? 'button' : undefined}
@@ -228,8 +233,20 @@ function Gauge({
         }
       } : undefined}
     >
-      <div className="flex items-center gap-4 lg:flex-col lg:items-stretch">
-        <div className="relative grid h-10 w-10 shrink-0 place-items-center">
+      <div
+        className={cn(
+          'gap-3',
+          density === 'compact'
+            ? 'flex flex-col items-start'
+            : 'flex items-center sm:gap-4 lg:flex-col lg:items-stretch',
+        )}
+      >
+        <div
+          className={cn(
+            'relative grid shrink-0 place-items-center',
+            density === 'compact' ? 'h-10 w-10' : 'h-8 w-8 sm:h-9 sm:w-9 lg:h-10 lg:w-10',
+          )}
+        >
           <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90" aria-hidden>
             <circle
               cx="70"
@@ -253,15 +270,15 @@ function Gauge({
           </svg>
           <div className="absolute inset-0 grid place-items-center text-center">
             <div>
-              <p className="text-2xs font-medium uppercase tabular text-foreground-secondary">
-                {safePercent.toFixed(0)}%
+              <p className="text-xs font-medium uppercase tabular text-foreground-secondary">
+                {meterPercentLabel(safePercent)}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 w-full flex-1 space-y-2">
+          <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-foreground">{label}</p>
               <p className="text-2xs text-foreground-muted">Allocated spend envelope</p>
@@ -276,6 +293,7 @@ function Gauge({
               }
               size="sm"
               dot
+              className="shrink-0"
             >
               {state === 'critical'
                 ? 'Critical'
@@ -285,7 +303,7 @@ function Gauge({
             </Badge>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-foreground-secondary">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-foreground-secondary">
             <span className="inline-flex items-center gap-1">
               <Wallet className="h-4 w-4" aria-hidden />
               {formatCurrency(spent, resolvedCurrency, { compact: true })}
@@ -296,7 +314,7 @@ function Gauge({
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-2xs text-foreground-muted">
+          <div className="flex flex-wrap items-center gap-2 text-2xs text-foreground-muted">
             <span className={cn('inline-flex rounded-full px-2 py-1', STATE_RING[state])}>
               {state === 'critical'
                 ? 'Over-allocated'
@@ -316,7 +334,7 @@ function Gauge({
 
       {/* Historical sparkline — fixed height keeps layout shift at zero. */}
       <div className="mt-3 border-t border-border/60 pt-3">
-        <div className="flex items-center justify-between text-2xs text-foreground-muted">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-2xs text-foreground-muted">
           <span>14-day velocity</span>
           <span className="tabular">
             {formatCurrency(dailyAverage, resolvedCurrency, { compact: true })}/day avg
@@ -380,7 +398,7 @@ export function BudgetMeters({
   }, [baseBudgets]);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {baseBudgets.map((budget, index) => (
         <Gauge
           key={`${budget.label}-${index}`}
@@ -401,12 +419,12 @@ export function BudgetMeterCard({ budgets }: { budgets?: BudgetMeterProps[] }) {
   return (
     <Card className="overflow-hidden">
       <CardContent className="space-y-4 pt-5">
-        <div className="flex items-center justify-between gap-2">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-2xs font-semibold uppercase tracking-[0.2em] text-foreground-muted">
               Budget consumption
             </p>
-            <h3 className="mt-1 font-display text-xl font-semibold">
+            <h3 className="mt-1 font-display text-lg font-semibold leading-tight sm:text-xl">
               Live envelope usage
             </h3>
           </div>

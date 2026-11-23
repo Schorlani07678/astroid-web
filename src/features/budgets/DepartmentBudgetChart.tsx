@@ -84,7 +84,7 @@ export function DepartmentBudgetChart({ data }: DepartmentBudgetChartProps) {
         ) : (
           <div
             ref={chartRef}
-            className="h-72 w-full min-w-0"
+            className="h-64 w-full min-w-0 sm:h-72"
             role="img"
             aria-label="Department budget consumption chart showing percentage of each allocated limit spent"
           >

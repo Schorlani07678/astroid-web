@@ -185,10 +185,10 @@ export function DepartmentBudgetConsumptionChart({
           </div>
 
           {!isBusy && departments.length > 1 && (
-            <div className="flex items-center gap-2">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <label
                 htmlFor="budget-consumption-department"
-                className="text-2xs font-medium text-foreground-secondary"
+                className="shrink-0 text-2xs font-medium text-foreground-secondary"
               >
                 Department
               </label>
@@ -196,7 +196,7 @@ export function DepartmentBudgetConsumptionChart({
                 id="budget-consumption-department"
                 value={department?.id ?? ''}
                 onChange={(event) => setSelectedId(event.target.value)}
-                className="py-1.5 rounded-button border border-border bg-surface px-3 text-xs font-medium text-foreground focus:border-gold focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="w-full min-w-0 rounded-button border border-border bg-surface py-1.5 px-3 text-xs font-medium text-foreground focus:border-gold focus:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
               >
                 {departments.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -247,7 +247,7 @@ export function DepartmentBudgetConsumptionChart({
 
             <div
               ref={chartRef}
-              className="h-72 w-full min-w-0"
+              className="h-64 w-full min-w-0 sm:h-72"
               role="img"
               aria-label={`${department!.departmentName} cumulative spend versus allocated threshold`}
             >
