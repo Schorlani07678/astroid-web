@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { env, isMockMode } from '@/lib/env';
 import { storeToken } from '@/services/client';
 import { useFreighterStore } from '@/stores/freighter-store';
+import { FreighterErrorBanner } from '@/features/wallet/components/FreighterErrorBanner';
 
 /** Safely call a Freighter API function with a timeout to prevent infinite hangs. */
 async function withTimeout<T>(promise: Promise<T>, ms = 15000): Promise<T> {
@@ -33,64 +34,68 @@ export default function AuthPage() {
 
       const publicKey = await connectFreighter();
 
-      if (!publicKey) {
-        const stateError = useFreighterStore.getState().error;
-        throw new Error(stateError ?? 'Could not retrieve public key from Freighter.');
-      }
+      // Wallet failures are classified in the store and rendered by
+      // <FreighterErrorBanner /> with a recovery action for each error code.
+      if (!publicKey) return;
 
-      if (!isMockMode) {
-        const base = `${env.apiUrl}${env.apiVersion}`;
-        const demoEmail = 'owner@astroid.dev';
-        const demoPassword = 'Astroid!Demo123';
-
-        try {
-          // Attempt login first; if the account doesn't exist yet, register it.
-          let res = await withTimeout(fetch(`${base}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: demoEmail, password: demoPassword }),
-          }), 10000);
-
-          if (!res.ok) {
-            // Fallback: register then login (first-time setup)
-            await fetch(`${base}/auth/register`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                organizationName: 'Astroid Labs',
-                name: 'Ava Owner',
-                email: demoEmail,
-                password: demoPassword,
-              }),
-            });
-            res = await withTimeout(fetch(`${base}/auth/login`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: demoEmail, password: demoPassword }),
-            }), 10000);
-          }
-
-          const body = await res.json();
-          const token: string | undefined =
-            body?.data?.tokens?.accessToken ?? body?.tokens?.accessToken;
-
-          if (token) {
-            storeToken(token);
-          }
-          // If no token returned, continue anyway — dashboard uses mock data fallback
-        } catch (backendErr) {
-          // Backend is unreachable (cold start, etc.) — proceed to dashboard with mock data
-          console.warn('Backend auth skipped, continuing with mock mode:', backendErr);
-        }
-      }
-
-      router.push('/overview');
+      await completeLogin();
     } catch (err: unknown) {
       console.error('Freighter login failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to connect to Freighter wallet.');
     } finally {
       setIsConnecting(false);
     }
+  };
+
+  /** Backend session + redirect once Freighter has returned a public key. */
+  const completeLogin = async () => {
+    if (!isMockMode) {
+      const base = `${env.apiUrl}${env.apiVersion}`;
+      const demoEmail = 'owner@astroid.dev';
+      const demoPassword = 'Astroid!Demo123';
+
+      try {
+        // Attempt login first; if the account doesn't exist yet, register it.
+        let res = await withTimeout(fetch(`${base}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: demoEmail, password: demoPassword }),
+        }), 10000);
+
+        if (!res.ok) {
+          // Fallback: register then login (first-time setup)
+          await fetch(`${base}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              organizationName: 'Astroid Labs',
+              name: 'Ava Owner',
+              email: demoEmail,
+              password: demoPassword,
+            }),
+          });
+          res = await withTimeout(fetch(`${base}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: demoEmail, password: demoPassword }),
+          }), 10000);
+        }
+
+        const body = await res.json();
+        const token: string | undefined =
+          body?.data?.tokens?.accessToken ?? body?.tokens?.accessToken;
+
+        if (token) {
+          storeToken(token);
+        }
+        // If no token returned, continue anyway — dashboard uses mock data fallback
+      } catch (backendErr) {
+        // Backend is unreachable (cold start, etc.) — proceed to dashboard with mock data
+        console.warn('Backend auth skipped, continuing with mock mode:', backendErr);
+      }
+    }
+
+    router.push('/overview');
   };
 
 
@@ -143,8 +148,19 @@ export default function AuthPage() {
             )}
           </button>
 
+          <FreighterErrorBanner
+            className="mt-4"
+            onRecovered={() => {
+              setError(null);
+              void completeLogin().catch((err: unknown) => {
+                setError(err instanceof Error ? err.message : 'Failed to complete sign-in.');
+              });
+            }}
+          />
+
           {error && (
             <motion.p 
+              role="alert" 
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               className="mt-4 text-center text-sm text-danger"

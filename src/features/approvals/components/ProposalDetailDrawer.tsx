@@ -12,10 +12,8 @@ import { RiskBadge } from '@/components/dashboard/risk-badge';
 import { formatCurrency, formatRelativeTime } from '@/lib/format';
 import { useProposalApproval } from '@/hooks/useProposalApproval';
 import { useStellarWallet } from '@/hooks/useStellarWallet';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import type { Proposal } from '@/types/domain';
-
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export interface ProposalDetailDrawerProps {
   proposal: Proposal;
@@ -40,46 +38,16 @@ export function ProposalDetailDrawer({ proposal, open, onClose }: ProposalDetail
     closeRef.current = onClose;
   }, [onClose]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const trigger = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    panelRef.current?.focus();
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !submitGuard.current) {
-        closeRef.current();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const panel = panelRef.current;
-      if (!panel) return;
-      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-        .filter((element) => element.offsetWidth > 0 || element.offsetHeight > 0 || element.getClientRects().length > 0);
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      if (!first || !last) {
-        event.preventDefault();
-        panel.focus();
-      } else if (!panel.contains(document.activeElement)) {
-        event.preventDefault();
-        (event.shiftKey ? last : first).focus();
-      } else if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = previousOverflow;
-      if (trigger && document.contains(trigger)) trigger.focus();
-    };
-  }, [open]);
+  // Shared WCAG AA modal behaviour (focus trap, scroll lock, focus restore).
+  // Escape is ignored while a decision is being signed/submitted so the user
+  // cannot dismiss the drawer mid-transaction.
+  useFocusTrap({
+    active: open,
+    containerRef: panelRef,
+    onEscape: () => {
+      if (!submitGuard.current) closeRef.current();
+    },
+  });
 
   const handleDecision = async (action: 'approved' | 'rejected') => {
     if (submitGuard.current || isProcessing || proposal.status !== 'pending') return;
@@ -134,7 +102,7 @@ export function ProposalDetailDrawer({ proposal, open, onClose }: ProposalDetail
             aria-modal="true"
             aria-labelledby={titleId}
             tabIndex={-1}
-            className="relative flex h-full w-full max-w-2xl flex-col border-l border-border bg-surface shadow-soft-3 outline-none"
+            className="relative flex h-full w-full max-w-2xl flex-col border-l border-border bg-surface shadow-soft-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
@@ -198,8 +166,27 @@ export function ProposalDetailDrawer({ proposal, open, onClose }: ProposalDetail
             </div>
 
             <footer className="flex flex-wrap justify-end gap-2 border-t border-border bg-surface px-5 py-4 sm:px-7">
-              <Button type="button" variant="outline" onClick={() => void handleDecision('rejected')} loading={busy && activeAction === 'rejected'} disabled={proposal.status !== 'pending' || busy}>Reject</Button>
-              <Button type="button" variant="gold" leftIcon={<Check className="h-4 w-4" aria-hidden />} onClick={() => void handleDecision('approved')} loading={busy && activeAction === 'approved'} disabled={proposal.status !== 'pending' || busy}>Approve</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleDecision('rejected')}
+                loading={busy && activeAction === 'rejected'}
+                disabled={proposal.status !== 'pending' || busy}
+                aria-label={`Reject proposal ${proposal.title}`}
+              >
+                Reject
+              </Button>
+              <Button
+                type="button"
+                variant="gold"
+                leftIcon={<Check className="h-4 w-4" aria-hidden />}
+                onClick={() => void handleDecision('approved')}
+                loading={busy && activeAction === 'approved'}
+                disabled={proposal.status !== 'pending' || busy}
+                aria-label={`Approve proposal ${proposal.title}`}
+              >
+                Approve
+              </Button>
             </footer>
           </motion.aside>
         </div>

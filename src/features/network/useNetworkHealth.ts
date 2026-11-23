@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { QUERY_CACHE, createBackoffRefetchInterval } from '@/lib/query-config';
 import type { NetworkHealthData, NetworkHealthStatus } from './types';
 
 // Mock generator for RPC latency & ledger sequence polling
@@ -31,7 +32,9 @@ export function useNetworkHealth(pollingIntervalMs: number = 5000) {
   return useQuery({
     queryKey: ['stellar-network-health'],
     queryFn: fetchNetworkHealth,
-    refetchInterval: pollingIntervalMs,
+    refetchInterval: createBackoffRefetchInterval({ baseMs: pollingIntervalMs }),
+    refetchIntervalInBackground: false,
     staleTime: pollingIntervalMs,
+    gcTime: QUERY_CACHE.live.gcTime,
   });
 }

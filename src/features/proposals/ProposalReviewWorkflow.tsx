@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import Link from 'next/link';
 import { ArrowDown, ArrowUp, ArrowUpDown, ArrowUpRight, Check, X } from 'lucide-react';
 import {
@@ -184,6 +184,43 @@ export function ProposalReviewWorkflow({
   };
 
   const activeStatus = (readFilter('status') as ProposalStatus | undefined) ?? 'all';
+  const selectStatus = (status: ProposalStatus | 'all') => {
+    setFilter('status', status);
+  };
+
+  // A tablist is a single tab stop: arrows move between tabs, Home/End jump to
+  // the ends. Without this, the ARIA tab roles promise keyboard behaviour that
+  // native buttons do not provide on their own.
+  const handleStatusTabKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    status: ProposalStatus | 'all',
+  ) => {
+    const currentIndex = statusTabs.indexOf(status);
+    let nextIndex: number;
+    switch (event.key) {
+      case 'ArrowRight':
+        nextIndex = (currentIndex + 1) % statusTabs.length;
+        break;
+      case 'ArrowLeft':
+        nextIndex = (currentIndex - 1 + statusTabs.length) % statusTabs.length;
+        break;
+      case 'Home':
+        nextIndex = 0;
+        break;
+      case 'End':
+        nextIndex = statusTabs.length - 1;
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    const nextStatus = statusTabs[nextIndex];
+    if (!nextStatus) return;
+    selectStatus(nextStatus);
+    document.getElementById(`proposal-tab-${nextStatus}`)?.focus();
+  };
+
   const riskFilter = (readFilter('riskScore') as RiskFilter | undefined) ?? 'all';
   const agentFilter = (readFilter('agentName') as string | undefined) ?? 'all';
   const minimumAmount = Number(readFilter('amount') ?? 0) || 0;
@@ -324,6 +361,7 @@ export function ProposalReviewWorkflow({
 
   const rows = table.getRowModel().rows;
   const filteredCount = rows.length;
+  const tabStopStatus = statusTabs.includes(activeStatus) ? activeStatus : 'all';
 
   return (
     <section
@@ -346,9 +384,11 @@ export function ProposalReviewWorkflow({
               type="button"
               aria-selected={selected}
               aria-controls="proposal-review-panel"
-              onClick={() => setFilter('status', status === 'all' ? 'all' : status)}
+              tabIndex={status === tabStopStatus ? 0 : -1}
+              onClick={() => selectStatus(status)}
+              onKeyDown={(event) => handleStatusTabKeyDown(event, status)}
               className={cn(
-                'gap-1.5 py-1.5 inline-flex items-center rounded-button border px-3 text-2xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'gap-1.5 py-1.5 inline-flex items-center rounded-button border px-3 text-2xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                 selected
                   ? 'border-gold bg-gold-soft text-foreground'
                   : 'border-border bg-surface text-foreground-secondary hover:border-gold hover:text-foreground',

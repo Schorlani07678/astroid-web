@@ -17,7 +17,7 @@ export function DesktopSidebar() {
   const setAssistantOpen = useAssistantStore((state) => state.setOpen);
 
   return (
-    <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-60 shrink-0 flex-col border-r border-border bg-surface lg:flex">
+    <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-60 shrink-0 flex-col border-r border-border bg-surface md:flex">
       <nav aria-label="Primary" className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
         {navSections.map((section) => (
           <div key={section.heading} className="space-y-1">

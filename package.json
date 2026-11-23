@@ -12,7 +12,7 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start -p 3001",
-    "test": "tsx --test src/components/charts/responsive.test.ts src/features/budgets/meterLayout.test.ts src/stores/freighter-store.test.ts src/features/agents/schema.test.ts src/features/transactions/filterTransactions.test.ts src/lib/xdr.test.ts src/services/mock/handlers.test.ts",
+    "test": "tsx --test src/stores/freighter-store.test.ts src/components/common/ErrorBoundary.test.ts src/lib/nav-breakpoint.test.ts src/features/agents/schema.test.ts src/features/transactions/filterTransactions.test.ts src/features/transactions/exportUtils.test.ts src/features/transactions/transactionTimeline.test.ts src/lib/xdr.test.ts src/services/mock/handlers.test.ts src/lib/query-config.test.ts src/hooks/focusTrapStack.test.ts src/lib/query-error-handling.test.ts src/features/budgets/departmentBudgetMeter.test.ts src/features/budgets/departmentBudgetTable.test.ts src/components/approval-modal.test.ts",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\""

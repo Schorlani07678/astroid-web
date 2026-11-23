@@ -7,6 +7,13 @@ import { toast } from 'sonner';
 import { queryKeys } from '@/services/query-keys';
 import { isMockMode } from '@/lib/env';
 import {
+  fetchStellarWithFailover,
+  resolveStellarEndpoints,
+  StellarAccountNotFoundError,
+  StellarEndpointFailoverError,
+  StellarRequestAbortedError,
+} from '@/stores/stellar-endpoint-store';
+import {
   normalizeFreighterError,
   useStellarWallet,
   type FreighterWalletError,
@@ -129,69 +136,74 @@ function mockBalanceSnapshot(publicKey: string, networkUrl: string): StellarWall
 }
 
 /**
- * Fetch one account's balances from Horizon with a hard timeout, mapping every
- * failure mode (abort/timeout, transport, malformed payload) into the shared
- * typed `FreighterWalletError` classification. A 404 is a *successful* result:
- * a valid but unfunded account simply holds nothing.
+ * Fetch one account's balances from Horizon with a hard timeout.
+ *
+ * Requests go through the endpoint failover layer (issue #522): a timeout,
+ * connection refusal or 429/5xx from the primary node automatically retries the
+ * next configured endpoint before the user ever sees an error. Every remaining
+ * failure mode (exhausted pool, abort, malformed payload) is mapped into the
+ * shared typed `FreighterWalletError` classification. A 404 is a *successful*
+ * result: a valid but unfunded account simply holds nothing.
  */
 export async function fetchStellarWalletBalance(
   publicKey: string,
   networkUrl: string,
   timeoutMs = BALANCE_FETCH_TIMEOUT_MS,
 ): Promise<StellarWalletBalanceSnapshot> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let payload: unknown;
 
-  let response: Response;
   try {
-    response = await fetch(`${networkUrl}/accounts/${publicKey}`, {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
+    const result = await fetchStellarWithFailover<unknown>({
+      endpoints: resolveStellarEndpoints(networkUrl),
+      path: `/accounts/${publicKey}`,
+      timeoutMs,
     });
+    payload = result.data;
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
+    if (err instanceof StellarAccountNotFoundError) {
+      return {
+        publicKey,
+        networkUrl,
+        funded: false,
+        totalXlm: 0,
+        assets: [],
+        isMock: false,
+        fetchedAt: Date.now(),
+      };
+    }
+
+    if (err instanceof StellarRequestAbortedError) {
       throw normalizeFreighterError(
-        new Error('The Stellar network request timed out.'),
-        'Balance lookup timed out.',
+        new Error('The Stellar network request was cancelled.'),
+        'Balance lookup cancelled.',
       );
     }
+
+    if (err instanceof StellarEndpointFailoverError) {
+      // The pool is exhausted (or the node rejected the request outright).
+      // TanStack Query keeps the last successful snapshot on screen and the
+      // endpoint store flips to `read-only` so the UI can label it as cached.
+      throw normalizeFreighterError(
+        new Error(err.message),
+        'Stellar network lookup failed.',
+      );
+    }
+
     throw normalizeFreighterError(err, 'Balance lookup failed.');
-  } finally {
-    clearTimeout(timer);
   }
 
-  if (response.status === 404) {
-    return {
-      publicKey,
-      networkUrl,
-      funded: false,
-      totalXlm: 0,
-      assets: [],
-      isMock: false,
-      fetchedAt: Date.now(),
-    };
-  }
-
-  if (!response.ok) {
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    typeof (payload as HorizonAccountResponse).balance !== 'string'
+  ) {
     throw normalizeFreighterError(
-      new Error(`Horizon responded with transport error ${response.status}.`),
-      'Stellar network lookup failed.',
+      new Error('Malformed account payload from Horizon.'),
+      'Balance lookup failed.',
     );
   }
 
-  try {
-    const json = (await response.json()) as unknown;
-    if (
-      typeof json !== 'object' ||
-      json === null ||
-      typeof (json as HorizonAccountResponse).balance !== 'string'
-    ) {
-      throw new Error('Malformed account payload from Horizon.');
-    }
-    return toBalanceSnapshot(json as HorizonAccountResponse, publicKey, networkUrl);
-  } catch (err) {
-    throw normalizeFreighterError(err, 'Balance lookup failed.');
-  }
+  return toBalanceSnapshot(payload as HorizonAccountResponse, publicKey, networkUrl);
 }
 
 export interface UseStellarWalletBalanceResult {
