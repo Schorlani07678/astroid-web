@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { Copy, Settings2 } from 'lucide-react';
-import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormField, Input, Select, Textarea } from '@/components/ui/input';
@@ -18,6 +17,10 @@ import {
   SYSTEM_PROMPT_TEMPLATES,
   getSystemPromptTemplateById,
 } from '@/features/agents/systemPromptTemplates';
+import {
+  agentConfigPanelSchema,
+  type AgentConfigPanelValues,
+} from '@/features/agents/schema';
 
 const PROVIDER_LABELS: Record<AgentProviderType, string> = {
   nvidia: 'Nvidia',
@@ -27,21 +30,6 @@ const PROVIDER_LABELS: Record<AgentProviderType, string> = {
   ollama: 'Ollama',
   custom: 'Custom',
 };
-
-/**
- * Validation schema for the agent configuration panel.
- * Ensures temperature stays in [0, 2] and maxTokens is positive.
- */
-const agentConfigPanelSchema = z.object({
-  provider: z.enum(agentProviderTypes),
-  model: z.string().min(1, 'Model is required.'),
-  temperature: z.coerce.number().min(0, 'Temperature cannot be below 0.').max(2, 'Temperature cannot exceed 2.'),
-  maxTokens: z.coerce.number().min(1, 'Max tokens must be at least 1.'),
-  systemPrompt: z.string().min(1, 'System prompt is required.'),
-  systemPromptTemplate: z.string().optional().or(z.literal('')),
-});
-
-type AgentConfigPanelValues = z.infer<typeof agentConfigPanelSchema>;
 
 export interface AgentConfigPanelProps {
   defaultValues?: Partial<AgentConfigPanelValues>;

@@ -3,19 +3,39 @@ import test from 'node:test';
 import {
   AGENT_PROVIDERS,
   PROVIDER_MODELS,
+  agentConfigPanelSchema,
   agentConfigurationEditorSchema,
   agentConfigSchema,
+  updateAgentSchema,
   type AgentConfigurationEditorInput,
 } from './schema';
 import { agentProviderConfigSchema } from './providerConfigSchema';
 
 type ParseResult =
-  | { success: true; data: AgentConfigurationEditorInput }
+  | { success: true }
   | { success: false; error: { issues: { path: PropertyKey[]; message: string }[] } };
 
 /** First validation message for a field, including errors on array items. */
 const issueFor = (result: ParseResult, field: string) =>
   (result.success ? [] : result.error.issues).find((issue) => issue.path[0] === field)?.message;
+
+const validAgentConfig = {
+  name: 'Treasury agent',
+  provider: 'Nvidia',
+  model: 'meta/llama-3.1-405b-instruct',
+  mode: 'assisted',
+  temperature: 0.2,
+  maxTokens: 2_048,
+  monthlyBudget: 500,
+} as const;
+
+const validPanelConfig = {
+  provider: 'openai',
+  model: 'gpt-4o',
+  temperature: 0.7,
+  maxTokens: 2_048,
+  systemPrompt: 'You are a treasury agent.',
+} as const;
 
 const validEditorConfig = {
   provider: 'Nvidia',
@@ -24,6 +44,86 @@ const validEditorConfig = {
   allowedScopes: ['wallet.read', 'analytics.read'],
   tokenAllocation: 4_096,
 } as const;
+
+test('create schema enforces the inclusive 0–2 temperature range', () => {
+  for (const temperature of [0, 2]) {
+    assert.equal(
+      agentConfigSchema.safeParse({ ...validAgentConfig, temperature }).success,
+      true,
+      String(temperature),
+    );
+  }
+
+  for (const temperature of [-0.1, -1, 2.1, 3]) {
+    const result = agentConfigSchema.safeParse({
+      ...validAgentConfig,
+      temperature,
+    }) as ParseResult;
+    assert.ok(issueFor(result, 'temperature'), String(temperature));
+  }
+});
+
+test('create schema rejects negative and zero monthly spending limits', () => {
+  for (const monthlyBudget of [-500, -0.01, 0]) {
+    const result = agentConfigSchema.safeParse({
+      ...validAgentConfig,
+      monthlyBudget,
+    }) as ParseResult;
+    assert.ok(issueFor(result, 'monthlyBudget'), String(monthlyBudget));
+  }
+});
+
+test('create schema requires a positive whole-number max tokens cap', () => {
+  for (const maxTokens of [0, -1, -2_048, 1.5, 1_000_001]) {
+    const result = agentConfigSchema.safeParse({
+      ...validAgentConfig,
+      maxTokens,
+    }) as ParseResult;
+    assert.ok(issueFor(result, 'maxTokens'), String(maxTokens));
+  }
+
+  for (const maxTokens of [1, 1_000_000]) {
+    assert.equal(
+      agentConfigSchema.safeParse({ ...validAgentConfig, maxTokens }).success,
+      true,
+      String(maxTokens),
+    );
+  }
+});
+
+test('update schema applies the same temperature, budget, and token bounds to provided fields', () => {
+  const invalid = updateAgentSchema.safeParse({
+    temperature: -0.5,
+    monthlyBudget: -100,
+    maxTokens: 0,
+  }) as ParseResult;
+  assert.ok(issueFor(invalid, 'temperature'));
+  assert.ok(issueFor(invalid, 'monthlyBudget'));
+  assert.ok(issueFor(invalid, 'maxTokens'));
+
+  const valid = updateAgentSchema.safeParse({ temperature: 1.5, maxTokens: 4_096 });
+  assert.equal(valid.success, true);
+});
+
+test('panel schema accepts a valid configuration and rejects out-of-range values', () => {
+  assert.equal(agentConfigPanelSchema.safeParse(validPanelConfig).success, true);
+
+  for (const temperature of [-0.1, 2.1]) {
+    const result = agentConfigPanelSchema.safeParse({
+      ...validPanelConfig,
+      temperature,
+    }) as ParseResult;
+    assert.ok(issueFor(result, 'temperature'), String(temperature));
+  }
+
+  for (const maxTokens of [0, -1, 1.5, 1_000_001]) {
+    const result = agentConfigPanelSchema.safeParse({
+      ...validPanelConfig,
+      maxTokens,
+    }) as ParseResult;
+    assert.ok(issueFor(result, 'maxTokens'), String(maxTokens));
+  }
+});
 
 test('agent config rejects a model outside the selected provider catalog', () => {
   const result = agentConfigSchema.safeParse({
