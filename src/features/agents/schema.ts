@@ -7,7 +7,10 @@ import {
   agentEndpointUrlSchema,
   agentModelSchema,
   agentProviderSchema,
+  agentProviderTypes,
+  maxTokensSchema,
   requiresEndpoint,
+  temperatureSchema,
 } from '../../lib/validations/agent';
 
 /**
@@ -34,6 +37,34 @@ export {
   createAgentSchema as agentConfigSchema,
   type CreateAgentInput as AgentConfigFormValues,
 } from '../../lib/validations/agent';
+
+// ---------------------------------------------------------------------------
+// Agent configuration panel (components/AgentConfigPanel)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates the configuration panel's form values before they are saved.
+ *
+ * Kept here rather than inline in the component so the same rules are covered
+ * by the unit tests and reused by any other consumer of the panel's payload:
+ * the provider is one of the supported ids, the model is non-empty, the
+ * temperature stays within 0–2, and max tokens is a positive whole number.
+ */
+export const agentConfigPanelSchema = z.object({
+  provider: z.enum(agentProviderTypes, {
+    errorMap: () => ({ message: 'Select a supported provider.' }),
+  }),
+  model: agentModelSchema,
+  temperature: temperatureSchema,
+  maxTokens: maxTokensSchema,
+  systemPrompt: z
+    .string({ required_error: 'System prompt is required' })
+    .trim()
+    .min(1, 'System prompt is required.'),
+  systemPromptTemplate: z.string().optional().or(z.literal('')),
+});
+
+export type AgentConfigPanelValues = z.infer<typeof agentConfigPanelSchema>;
 
 // ---------------------------------------------------------------------------
 // Agent configuration editor (create / edit submission payload)

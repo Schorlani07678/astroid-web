@@ -157,6 +157,21 @@ export const monthlyBudgetSchema = z
   .positive('Monthly budget must be greater than 0')
   .max(1_000_000, 'Monthly budget cannot exceed 1,000,000 USDC');
 
+/** Largest per-response token cap an agent form accepts. */
+export const MAX_AGENT_TOKENS = 1_000_000;
+
+export const maxTokensSchema = z
+  .number({
+    required_error: 'Max tokens is required',
+    invalid_type_error: 'Max tokens must be a number',
+  })
+  .int('Max tokens must be a whole number')
+  .min(1, 'Max tokens must be at least 1')
+  .max(
+    MAX_AGENT_TOKENS,
+    `Max tokens cannot exceed ${MAX_AGENT_TOKENS.toLocaleString('en-US')}`,
+  );
+
 // ---------------------------------------------------------------------------
 // Cross-field rules shared by the schemas below
 // ---------------------------------------------------------------------------
@@ -224,6 +239,7 @@ const agentConfigFields = z.object({
   endpointUrl: agentEndpointUrlSchema,
   mode: agentModeSchema,
   temperature: temperatureSchema,
+  maxTokens: maxTokensSchema.optional(),
   monthlyBudget: monthlyBudgetSchema,
   singleTransactionCap: z
     .number({ invalid_type_error: 'Transaction limit must be a number' })
